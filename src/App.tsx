@@ -4,6 +4,7 @@ import OrderPanel from './components/OrderPanel'
 import Sidebar from './components/Sidebar'
 import DrawingToolbar from './components/DrawingToolbar'
 import Chart from './components/Chart'
+import WorldMap from './components/WorldMap'
 
 export default function App() {
   const [orders, setOrders] = useState<any[]>([])
@@ -22,40 +23,19 @@ export default function App() {
   }
 
   return (
-    // BASE COLOR: Deep Navy (The IQ Option feel)
     <div className="h-screen w-screen bg-[#10141d] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
       
-      {/* --- PRO BACKGROUND TEXTURES (Visible now!) --- */}
+      {/* --- BACKGROUND LAYER --- */}
+      <WorldMap />
       
-      {/* 1. TACTICAL GRID (The Blueprint Look) */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.15]" 
-        style={{ 
-          backgroundImage: `
-            linear-gradient(to right, #8b9bb4 1px, transparent 1px), 
-            linear-gradient(to bottom, #8b9bb4 1px, transparent 1px)
-          `, 
-          backgroundSize: '60px 60px' 
-        }}
-      ></div>
+      {/* Grid Overlay (Tactical Texture) */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.1]" style={{ backgroundImage: `linear-gradient(to right, #8b9bb4 1px, transparent 1px), linear-gradient(to bottom, #8b9bb4 1px, transparent 1px)`, backgroundSize: '60px 60px' }}></div>
+      
+      {/* Vignette (Focus on Center) */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 50% 50%, rgba(20, 30, 48, 0) 0%, rgba(11, 14, 17, 0.9) 100%)' }}></div>
 
-      {/* 2. DOT MATRIX (The High-Tech Noise) */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.2]" 
-        style={{ 
-          backgroundImage: 'radial-gradient(#5e6673 1px, transparent 1px)', 
-          backgroundSize: '15px 15px' 
-        }}
-      ></div>
 
-      {/* 3. VIGNETTE (Focus on the Center) */}
-      <div 
-        className="absolute inset-0 pointer-events-none" 
-        style={{ 
-          background: 'radial-gradient(circle at 50% 50%, rgba(20, 30, 48, 0) 0%, rgba(11, 14, 17, 0.8) 100%)' 
-        }}
-      ></div>
-
+      {/* --- MAIN INTERFACE --- */}
       <Header />
       
       <div className="flex-1 flex min-h-0 relative z-10">
