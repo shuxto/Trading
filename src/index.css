@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* IQ Option / Cyberpunk Palette */
+  --bg-dark: #0b0e11;   /* Deep trading black */
+  --bg-panel: #151a21;  /* Slightly lighter for sidebars */
+  --neon-green: #21ce99;
+  --neon-red: #f4553b;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: white;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Trading apps shouldn't scroll like a blog */
+}
