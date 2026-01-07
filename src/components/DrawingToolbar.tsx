@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   Crosshair, 
   TrendingUp, 
@@ -11,31 +12,25 @@ import {
   Lock, 
   Eye, 
   Trash2,
+  MoreHorizontal,
   PenTool
 } from 'lucide-react';
 
-// DEFINE THE PROPS (So App.tsx can talk to this component)
-interface DrawingToolbarProps {
-  activeTool: string | null;
-  onToolChange: (tool: string) => void;
-}
+export default function DrawingToolbar() {
+  const [activeTool, setActiveTool] = useState<string | null>('crosshair');
 
-export default function DrawingToolbar({ activeTool, onToolChange }: DrawingToolbarProps) {
-
-  // GROUP 1: DRAWING TOOLS (These change the cursor)
   const tools = [
     { id: 'crosshair', icon: Crosshair, label: 'Crosshair' },
-    { id: 'trend', icon: TrendingUp, label: 'Trend Line' }, // This works now!
-    { id: 'fib', icon: Hash, label: 'Fib Retracement' },
-    { id: 'brush', icon: PenTool, label: 'Brush' },
+    { id: 'trend', icon: TrendingUp, label: 'Trend Line' }, // Represents the Line tool
+    { id: 'fib', icon: Hash, label: 'Fib Retracement' },    // Represents the Pitchfork/Fib tool
+    { id: 'brush', icon: PenTool, label: 'Brush' },         // Represents the Brush
     { id: 'text', icon: Type, label: 'Text' },
-    { id: 'pattern', icon: MousePointer2, label: 'Patterns' },
+    { id: 'pattern', icon: MousePointer2, label: 'Patterns' }, // Represents the Head & Shoulders icon
     { id: 'sticker', icon: Smile, label: 'Icons' },
     { id: 'measure', icon: Ruler, label: 'Measure' },
     { id: 'zoom', icon: Search, label: 'Zoom In' },
   ];
 
-  // GROUP 2: UTILITY TOOLS (These are actions, not modes)
   const bottomTools = [
     { id: 'magnet', icon: Magnet, label: 'Weak Magnet' },
     { id: 'lock', icon: Lock, label: 'Lock All Drawings' },
@@ -51,12 +46,12 @@ export default function DrawingToolbar({ activeTool, onToolChange }: DrawingTool
         {tools.map((tool) => (
           <button
             key={tool.id}
-            onClick={() => onToolChange(tool.id)} // <--- Updates the App State
+            onClick={() => setActiveTool(tool.id)}
             className={`
               w-full aspect-square rounded flex items-center justify-center transition-all group relative
               ${activeTool === tool.id 
-                ? 'bg-[#21ce99]/10 text-[#21ce99] shadow-[0_0_10px_rgba(33,206,153,0.2)]' // Active Style (Glowing Green)
-                : 'text-[#8b9bb4] hover:bg-[#2a303c] hover:text-white'} // Inactive Style
+                ? 'bg-[#21ce99]/10 text-[#21ce99] shadow-[0_0_10px_rgba(33,206,153,0.2)]' 
+                : 'text-[#8b9bb4] hover:bg-[#2a303c] hover:text-white'}
             `}
           >
             <tool.icon size={18} strokeWidth={1.5} />
@@ -77,8 +72,6 @@ export default function DrawingToolbar({ activeTool, onToolChange }: DrawingTool
         {bottomTools.map((tool) => (
           <button
             key={tool.id}
-            // For now, these just log to console. You can add logic later.
-            onClick={() => console.log(`Clicked utility: ${tool.id}`)}
             className="w-full aspect-square rounded flex items-center justify-center text-[#8b9bb4] hover:bg-[#2a303c] hover:text-white transition-all group relative"
           >
             <tool.icon size={18} strokeWidth={1.5} />
