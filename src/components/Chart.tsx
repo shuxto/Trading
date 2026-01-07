@@ -4,7 +4,6 @@ import { useBinanceData } from '../hooks/useBinanceData';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
 
-// FIX: Added activeTool and onToolComplete to the interface
 interface ChartProps {
   activeOrders?: any[]; 
   activeTool: string | null;     
@@ -34,8 +33,16 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#8b9bb4', attributionLogo: false },
-      grid: { vertLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1, visible: true }, horzLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1, visible: true } },
+      layout: { 
+        background: { type: ColorType.Solid, color: 'transparent' }, 
+        textColor: '#9ca3af', // Lighter text color
+        attributionLogo: false 
+      },
+      grid: { 
+        // CLEANER LOOK: Very faint grid lines (0.05 opacity)
+        vertLines: { color: 'rgba(255, 255, 255, 0.05)', style: 1, visible: true }, 
+        horzLines: { color: 'rgba(255, 255, 255, 0.05)', style: 1, visible: true } 
+      },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
       timeScale: { timeVisible: true, secondsVisible: true, borderColor: '#2a2e39', rightOffset: 20, barSpacing: 6 },

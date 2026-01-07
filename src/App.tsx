@@ -23,18 +23,12 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-[#10141d] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
+    // GRADIENT: Dark (#151820) at Top -> Blue (#2c3141) at Bottom
+    <div className="h-screen w-screen bg-gradient-to-b from-[#151820] to-[#2c3141] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
       
-      {/* --- BACKGROUND LAYER --- */}
+      {/* Map sits quietly on top of the gradient */}
       <WorldMap />
       
-      {/* Grid Overlay (Tactical Texture) */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.1]" style={{ backgroundImage: `linear-gradient(to right, #8b9bb4 1px, transparent 1px), linear-gradient(to bottom, #8b9bb4 1px, transparent 1px)`, backgroundSize: '60px 60px' }}></div>
-      
-      {/* Vignette (Focus on Center) */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 50% 50%, rgba(20, 30, 48, 0) 0%, rgba(11, 14, 17, 0.9) 100%)' }}></div>
-
-
       {/* --- MAIN INTERFACE --- */}
       <Header />
       
