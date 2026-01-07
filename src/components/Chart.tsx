@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-// FIX: Added 'type' before ISeriesApi to satisfy the strict rules
-import { createChart, ColorType, AreaSeries, type ISeriesApi } from 'lightweight-charts';
+import { createChart, ColorType, AreaSeries, type ISeriesApi, type MouseEventParams } from 'lightweight-charts';
 import { useBinanceData } from '../hooks/useBinanceData';
+import ChartContextMenu from './ChartContextMenu';
 
 interface ChartProps {
   activeOrders?: any[]; 
@@ -15,43 +15,93 @@ export default function Chart({ activeOrders }: ChartProps) {
   
   // STATE
   const [interval, setInterval] = useState<string>('1m');
+  const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
+    visible: false, x: 0, y: 0, price: 0
+  });
 
   // DATA HOOK
   const { candles, currentPrice, lastCandleTime } = useBinanceData(interval);
 
-  // REFS
+  // REFS (Physics & Engine)
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const currentAnimatedPriceRef = useRef<number | null>(null);
 
-  // --- 1. SETUP CHART (RUNS ONCE) ---
+  // --- 1. SETUP CHART (THE IQ OPTION VISUALS) ---
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#5e6673', attributionLogo: false },
-      grid: { vertLines: { color: 'rgba(0,0,0,0)' }, horzLines: { color: 'rgba(42, 46, 57, 0.2)' } },
+      layout: { 
+        background: { type: ColorType.Solid, color: 'transparent' }, 
+        textColor: '#8b9bb4', // Light Blue-Grey Text
+        attributionLogo: false 
+      },
+      grid: { 
+        vertLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1, visible: true }, // Visible Grid
+        horzLines: { color: 'rgba(42, 46, 57, 0.5)', style: 1, visible: true } 
+      },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
       timeScale: { 
         timeVisible: true, 
         secondsVisible: true, 
         borderColor: '#2a2e39', 
-        rightOffset: 20 
+        rightOffset: 20,
+        barSpacing: 6, 
       },
-      rightPriceScale: { borderColor: '#2a2e39' },
-      crosshair: { vertLine: { visible: false, labelVisible: false }, horzLine: { visible: false, labelVisible: false } },
+      rightPriceScale: { 
+        borderColor: 'transparent', // No ugly border line
+      },
+      // CROSSHAIR SETTINGS
+      crosshair: {
+        vertLine: { 
+          visible: true, 
+          labelVisible: true,
+          style: 3, // Dotted
+          width: 1,
+          color: '#ffffff', // White
+          labelBackgroundColor: '#1c2030',
+        },
+        horzLine: { 
+          visible: true, 
+          labelVisible: true,
+          style: 3, // Dotted
+          width: 1,
+          color: '#ffffff', // White
+          labelBackgroundColor: '#21ce99', // Green Price Tag
+        },
+        mode: 0, // 0 = Free Roam (Follows Mouse), 1 = Magnet
+      },
     });
 
+    // THE WHITE LINE
     const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: '#21ce99',
-      topColor: 'rgba(33, 206, 153, 0.4)',
-      bottomColor: 'rgba(33, 206, 153, 0)', 
+      lineColor: '#ffffff', // Pure White
+      topColor: 'rgba(255, 255, 255, 0.1)', // Faint Glow
+      bottomColor: 'rgba(255, 255, 255, 0)', // Transparent
       lineWidth: 2,
+      crosshairMarkerVisible: false, // Hide default dot (we use our own glowing one)
     });
 
     chartRef.current = chart;
     seriesRef.current = areaSeries;
+
+    // EVENT LISTENERS
+    chart.subscribeClick((param: MouseEventParams) => {
+        setMenuState(prev => ({ ...prev, visible: false }));
+    });
+
+    const handleRightClick = (event: MouseEvent) => {
+        event.preventDefault(); 
+        if (!chartRef.current || !seriesRef.current) return;
+        const price = seriesRef.current.coordinateToPrice(event.offsetY);
+        if (price) {
+            setMenuState({ visible: true, x: event.clientX, y: event.clientY, price: price });
+        }
+    };
+
+    chartContainerRef.current.addEventListener('contextmenu', handleRightClick);
 
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -61,6 +111,9 @@ export default function Chart({ activeOrders }: ChartProps) {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      if (chartContainerRef.current) {
+         chartContainerRef.current.removeEventListener('contextmenu', handleRightClick);
+      }
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
@@ -77,14 +130,12 @@ export default function Chart({ activeOrders }: ChartProps) {
   }, [candles]);
 
 
-  // --- 3. ANIMATION LOOP ---
+  // --- 3. PHYSICS ANIMATION LOOP ---
   useEffect(() => {
     let animationFrameId: number;
-
     const animate = () => {
       if (currentPrice && lastCandleTime && chartRef.current && seriesRef.current) {
-        
-        // Physics
+        // Physics Calculation
         if (currentAnimatedPriceRef.current === null) currentAnimatedPriceRef.current = currentPrice;
         
         const diff = currentPrice - currentAnimatedPriceRef.current;
@@ -94,13 +145,10 @@ export default function Chart({ activeOrders }: ChartProps) {
             currentAnimatedPriceRef.current = currentPrice;
         }
 
-        // Draw
-        seriesRef.current.update({ 
-            time: lastCandleTime, 
-            value: currentAnimatedPriceRef.current 
-        });
+        // Draw Line
+        seriesRef.current.update({ time: lastCandleTime, value: currentAnimatedPriceRef.current });
 
-        // Dot
+        // Draw Dot
         const y = seriesRef.current.priceToCoordinate(currentAnimatedPriceRef.current);
         const coordinateX = chartRef.current.timeScale().timeToCoordinate(lastCandleTime);
         const containerWidth = chartContainerRef.current?.clientWidth || 0;
@@ -113,10 +161,16 @@ export default function Chart({ activeOrders }: ChartProps) {
       }
       animationFrameId = requestAnimationFrame(animate);
     };
-    
     animate();
     return () => cancelAnimationFrame(animationFrameId);
   }, [currentPrice, lastCandleTime]);
+
+  const handleMenuAction = (action: string, price: number) => {
+      if (action === 'reset' && chartRef.current) {
+          chartRef.current.timeScale().fitContent();
+      }
+      setMenuState(prev => ({ ...prev, visible: false }));
+  };
 
 
   return (
@@ -133,16 +187,20 @@ export default function Chart({ activeOrders }: ChartProps) {
         ))}
       </div>
 
+      {/* BRANDING */}
       <div className="absolute top-6 left-6 z-20 pointer-events-none mix-blend-difference"><h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">BTC/USD</h1></div>
 
-      <div ref={chartContainerRef} className="w-full h-full relative" />
+      {/* CHART CONTAINER */}
+      <div ref={chartContainerRef} className="w-full h-full relative cursor-crosshair" />
 
+      {/* THE GLOWING DOT */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}>
         <div className="absolute inset-0 rounded-full bg-[#21ce99]" style={{ animation: 'pulseRing 1.5s infinite ease-out' }}></div>
-        <div className="absolute left-6 top-1/2 -translate-y-1/2 bg-[#21ce99] text-[#0b0e11] text-[10px] font-bold px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">{currentPrice ? currentPrice.toFixed(2) : '...'}</div>
+        {/* We removed the price tag here to look cleaner like IQ Option, but the line remains */}
         <div className="absolute right-full top-1/2 -translate-y-1/2 w-[1000px] border-b border-dashed border-[#21ce99] opacity-30"></div>
       </div>
       
+      {/* BOTTOM BAR */}
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div><span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE BINANCE FEED</span></div>
@@ -150,6 +208,18 @@ export default function Chart({ activeOrders }: ChartProps) {
           <span className="text-[10px] text-white font-mono font-bold">{currentPrice ? currentPrice.toFixed(2) : '---'}</span>
         </div>
       </div>
+
+      {/* CONTEXT MENU */}
+      {menuState.visible && (
+        <ChartContextMenu 
+          x={menuState.x} 
+          y={menuState.y} 
+          price={menuState.price}
+          onClose={() => setMenuState(prev => ({ ...prev, visible: false }))}
+          onAction={handleMenuAction}
+        />
+      )}
+
     </div>
   );
 }

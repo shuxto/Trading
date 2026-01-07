@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Header from './components/Header'
 import OrderPanel from './components/OrderPanel'
 import Sidebar from './components/Sidebar'
+import DrawingToolbar from './components/DrawingToolbar' // <--- IMPORT IT
 import Chart from './components/Chart'
 
 export default function App() {
@@ -20,29 +21,29 @@ export default function App() {
   }
 
   return (
-    // MAIN CONTAINER: Fixed screen size, no scrolling on body
-    <div className="h-screen w-screen bg-[#0b0e11] text-white flex flex-col overflow-hidden fixed inset-0">
+    <div className="h-screen w-screen bg-[#10141d] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
       
-      {/* Top Header */}
+      {/* BACKGROUND EFFECTS */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.06]" style={{ backgroundImage: `linear-gradient(to right, #8b9bb4 1px, transparent 1px), linear-gradient(to bottom, #8b9bb4 1px, transparent 1px)`, backgroundSize: '60px 60px' }}></div>
+      <div className="absolute inset-0 pointer-events-none opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(#5e6673 1px, transparent 1px)', backgroundSize: '15px 15px' }}></div>
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 50% 50%, rgba(20, 30, 48, 0) 0%, rgba(11, 14, 17, 0.9) 100%)' }}></div>
+
       <Header />
       
-      {/* Content Layout */}
-      <div className="flex-1 flex min-h-0 relative">
+      <div className="flex-1 flex min-h-0 relative z-10">
         
-        {/* Left Sidebar (Desktop only) */}
+        {/* 1. MAIN NAVIGATION (Far Left) */}
         <Sidebar />
+
+        {/* 2. DRAWING TOOLS (Next to it) - NEW! */}
+        <DrawingToolbar />
         
-        {/* Chart Area */}
-        {/* pb-[80px] on mobile creates space for the bottom buttons */}
-        <main className="flex-1 relative bg-[#0b0e11] flex flex-col pb-[80px] md:pb-0">
-          <div className="absolute inset-0 opacity-10 pointer-events-none" 
-               style={{backgroundImage: 'linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px)', backgroundSize: '40px 40px'}}>
-          </div>
-          
+        {/* 3. CHART AREA */}
+        <main className="flex-1 relative flex flex-col pb-[80px] md:pb-0">
           <Chart activeOrders={orders} />
         </main>
 
-        {/* Right Panel (Desktop) / Bottom Bar (Mobile) */}
+        {/* 4. ORDER PANEL (Far Right) */}
         <OrderPanel onTrade={handleTrade} />
 
       </div>
