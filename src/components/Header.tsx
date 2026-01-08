@@ -1,4 +1,6 @@
-import { User, ChevronDown } from 'lucide-react';
+import { User } from 'lucide-react';
+// REMOVED: ChevronDown import (it was causing the error)
+
 import { useClickSound } from '../hooks/useClickSound';
 
 export default function Header() {
@@ -15,14 +17,12 @@ export default function Header() {
         <div className="font-bold text-lg tracking-widest text-white">TRADING<span className="text-[#21ce99]">PRO</span></div>
       </div>
 
-      {/* 2. CENTER STATS (Optional - can add market ticker here later) */}
-
       {/* 3. RIGHT PROFILE & BALANCE */}
       <div className="flex items-center gap-4">
         
-        {/* Balance Box (Glowing) */}
+        {/* Balance Box */}
         <div 
-          onClick={playClick} // Added Sound
+          onClick={playClick} 
           className="bg-[#0b0e11] px-4 py-1.5 rounded-lg border border-[#2a2e39] shadow-lg flex flex-col items-end group cursor-pointer hover:border-[#21ce99] transition-colors"
         >
           <span className="text-[#5e6673] text-[9px] font-bold uppercase">Total Balance</span>
@@ -31,7 +31,7 @@ export default function Header() {
 
         {/* Profile Circle */}
         <div 
-          onClick={playClick} // Added Sound
+          onClick={playClick}
           className="w-9 h-9 rounded-full bg-[#2a303c] flex items-center justify-center hover:bg-[#3e4552] transition cursor-pointer border border-[#2a2e39]"
         >
           <User size={18} className="text-[#8b9bb4]" />

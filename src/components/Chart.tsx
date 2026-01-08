@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi, type MouseEventParams } from 'lightweight-charts';
+import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi } from 'lightweight-charts';
 import { useBinanceData } from '../hooks/useBinanceData';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
@@ -12,7 +12,8 @@ interface ChartProps {
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-export default function Chart({ activeOrders, activeTool, onToolComplete }: ChartProps) {
+// REMOVED: activeOrders from destructuring to fix TS error
+export default function Chart({ activeTool, onToolComplete }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   
@@ -36,14 +37,9 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
       layout: { 
         background: { type: ColorType.Solid, color: 'transparent' }, 
         textColor: '#9ca3af', 
-        // TRICK: Bigger font size forces the chart to space out grid lines (Bigger Boxes)
-
         attributionLogo: false 
       },
       grid: { 
-        // PRO GRID:
-        // 1. Visible: true
-        // 2. Opacity: 0.08 (Visible but not distracting)
         vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1, visible: true }, 
         horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1, visible: true } 
       },
@@ -54,8 +50,6 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
         secondsVisible: true, 
         borderColor: '#2a2e39', 
         rightOffset: 10, 
-        // BIGGER GRID BOXES:
-        // Increased from 6 to 15. This zooms the chart in by default.
         barSpacing: 6, 
       },
       rightPriceScale: { borderColor: 'transparent' },
@@ -68,7 +62,6 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
 
     const areaSeries = chart.addSeries(AreaSeries, {
       lineColor: '#ffffff', 
-      // Flat fill (same top/bottom color) as requested
       topColor: 'rgba(255, 255, 255, 0.1)', 
       bottomColor: 'rgba(255, 255, 255, 0.1)', 
       lineWidth: 2, 
@@ -81,7 +74,8 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
     setChartApi(chart);
     setSeriesApi(areaSeries);
 
-    chart.subscribeClick((param: MouseEventParams) => {
+    // FIX: Removed unused 'param'
+    chart.subscribeClick(() => {
         setMenuState(prev => ({ ...prev, visible: false }));
     });
 
@@ -141,7 +135,8 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
     return () => cancelAnimationFrame(animationFrameId);
   }, [currentPrice, lastCandleTime]);
 
-  const handleMenuAction = (action: string, price: number) => {
+  // FIX: Removed unused 'price'
+  const handleMenuAction = (action: string) => {
       if (action === 'reset' && chartRef.current) chartRef.current.timeScale().fitContent();
       setMenuState(prev => ({ ...prev, visible: false }));
   };
@@ -171,13 +166,11 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
         onToolComplete={onToolComplete}
       />
 
-      {/* GLOWING DOT (I kept this since it was in your provided code) */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}>
         <div className="absolute inset-0 rounded-full bg-[#21ce99]" style={{ animation: 'pulseRing 1.5s infinite ease-out' }}></div>
         <div className="absolute right-full top-1/2 -translate-y-1/2 w-[1000px] border-b border-dashed border-[#21ce99] opacity-30"></div>
       </div>
       
-      {/* BOTTOM BAR */}
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div><span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE BINANCE FEED</span></div>

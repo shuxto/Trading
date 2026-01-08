@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+// REMOVED: useRef import
 import { type Time } from 'lightweight-charts';
 
 export function useBinanceData(interval: string) {
-  // Store the candle data
   const [candles, setCandles] = useState<{ time: Time; value: number }[]>([]);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [lastCandleTime, setLastCandleTime] = useState<Time | null>(null);
 
   useEffect(() => {
-    // 1. FETCH HISTORY (REST API)
     const fetchHistory = async () => {
       try {
         const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=1000`);
@@ -21,7 +20,6 @@ export function useBinanceData(interval: string) {
 
         setCandles(formattedData);
         
-        // Set initial state
         const last = formattedData[formattedData.length - 1];
         setCurrentPrice(last.value);
         setLastCandleTime(last.time);
@@ -32,7 +30,6 @@ export function useBinanceData(interval: string) {
 
     fetchHistory();
 
-    // 2. LIVE UPDATES (WEBSOCKET)
     const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@trade');
     
     ws.onmessage = (event) => {
