@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi } from 'lightweight-charts';
+import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi, CrosshairMode } from 'lightweight-charts';
 import { useBinanceData } from '../hooks/useBinanceData';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
@@ -12,7 +12,6 @@ interface ChartProps {
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-// REMOVED: activeOrders from destructuring to fix TS error
 export default function Chart({ activeTool, onToolComplete }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
@@ -29,6 +28,29 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const currentAnimatedPriceRef = useRef<number | null>(null);
+
+  // 1. NEW EFFECT: Toggle Crosshair lines ON/OFF dynamically
+  useEffect(() => {
+    if (!chartApi) return;
+
+    // Only show the crosshair lines if the active tool is explicitly 'crosshair'
+    const isCrosshairActive = activeTool === 'crosshair';
+
+    chartApi.applyOptions({
+      crosshair: {
+        vertLine: { 
+          visible: isCrosshairActive, 
+          labelVisible: isCrosshairActive 
+        },
+        horzLine: { 
+          visible: isCrosshairActive, 
+          labelVisible: isCrosshairActive 
+        },
+        // We can keep the mode Normal, visibility controls the lines
+        mode: CrosshairMode.Normal, 
+      },
+    });
+  }, [chartApi, activeTool]);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -54,8 +76,9 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
       },
       rightPriceScale: { borderColor: 'transparent' },
       crosshair: {
-        vertLine: { visible: true, labelVisible: true, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#1c2030' },
-        horzLine: { visible: true, labelVisible: true, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#21ce99' },
+        // Initial state (will be updated by the effect above immediately)
+        vertLine: { visible: false, labelVisible: false, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#1c2030' },
+        horzLine: { visible: false, labelVisible: false, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#21ce99' },
         mode: 0,
       },
     });
@@ -74,7 +97,6 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     setChartApi(chart);
     setSeriesApi(areaSeries);
 
-    // FIX: Removed unused 'param'
     chart.subscribeClick(() => {
         setMenuState(prev => ({ ...prev, visible: false }));
     });
@@ -135,7 +157,6 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     return () => cancelAnimationFrame(animationFrameId);
   }, [currentPrice, lastCandleTime]);
 
-  // FIX: Removed unused 'price'
   const handleMenuAction = (action: string) => {
       if (action === 'reset' && chartRef.current) chartRef.current.timeScale().fitContent();
       setMenuState(prev => ({ ...prev, visible: false }));
@@ -156,7 +177,11 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
 
       <div className="absolute top-6 left-6 z-20 pointer-events-none mix-blend-difference"><h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">BTC/USD</h1></div>
 
-      <div ref={chartContainerRef} className="w-full h-full relative cursor-crosshair" />
+      {/* 2. DYNAMIC CURSOR CLASS: Switches between 'cursor-crosshair' and 'cursor-default' */}
+      <div 
+        ref={chartContainerRef} 
+        className={`w-full h-full relative ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} 
+      />
 
       {/* RENDER OVERLAY */}
       <ChartOverlay 

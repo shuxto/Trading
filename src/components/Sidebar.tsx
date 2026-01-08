@@ -1,59 +1,99 @@
 import { 
-  LayoutGrid, 
-  BarChart2, 
-  History, 
-  Wallet, 
-  Settings, 
-  HelpCircle, 
-  LogOut 
+  MousePointer2, 
+  TrendingUp, 
+  Target, 
+  Hash, 
+  Pencil, 
+  Type, 
+  Smile, 
+  Ruler, 
+  Search, 
+  Magnet, 
+  Lock, 
+  Eye, 
+  Trash2,
+  Minus 
 } from 'lucide-react';
 
-export default function Sidebar() {
+interface SidebarProps {
+  activeTool: string | null;
+  onToolSelect: (tool: string | null) => void; // UPDATED: Accepts null now
+  onClear: () => void;
+}
+
+export default function Sidebar({ activeTool, onToolSelect, onClear }: SidebarProps) {
+  
+  const tools = [
+    { id: 'crosshair', icon: <Target size={20} />, label: 'Crosshair' },
+    { id: 'trend', icon: <TrendingUp size={20} />, label: 'Trend Line' },
+    { id: 'horizontal', icon: <Minus size={20} />, label: 'Horizontal Line' },
+    { id: 'fib', icon: <Hash size={20} />, label: 'Fibonacci' },
+    { id: 'brush', icon: <Pencil size={20} />, label: 'Brush' },
+    { id: 'text', icon: <Type size={20} />, label: 'Text' },
+    { id: 'pattern', icon: <MousePointer2 size={20} />, label: 'Patterns' },
+    { id: 'prediction', icon: <Smile size={20} />, label: 'Prediction' },
+    { id: 'measure', icon: <Ruler size={20} />, label: 'Measure' },
+    { id: 'zoom', icon: <Search size={20} />, label: 'Zoom' },
+  ];
+
+  const bottomTools = [
+    { id: 'magnet', icon: <Magnet size={20} />, label: 'Weak Magnet' },
+    { id: 'lock', icon: <Lock size={20} />, label: 'Lock All' },
+    { id: 'hide', icon: <Eye size={20} />, label: 'Hide All' },
+    { id: 'delete', icon: <Trash2 size={20} />, label: 'Delete All', action: onClear },
+  ];
+
+  // LOGIC: Handle Toggle for Crosshair
+  const handleToolClick = (toolId: string) => {
+    if (toolId === 'crosshair' && activeTool === 'crosshair') {
+      // If Crosshair is already active, turn it OFF
+      onToolSelect(null);
+    } else {
+      // Otherwise, select the tool normally
+      onToolSelect(toolId);
+    }
+  };
+
   return (
-    // CHANGED: bg-[#151a21] -> bg-[#151a21]/80 backdrop-blur-xl border-white/5
-    <aside className="hidden md:flex w-[60px] flex-col items-center py-4 border-r border-white/5 bg-[#151a21]/80 backdrop-blur-xl z-30">
+    <div className="w-14 bg-[#151a21] border-r border-[#2a2e39] flex flex-col items-center py-4 gap-4 z-40">
       
-      {/* Top Icons */}
-      <div className="flex flex-col gap-6 w-full items-center">
-        
-        {/* Active Tab */}
-        <button className="w-10 h-10 rounded-xl bg-[#21ce99]/20 flex items-center justify-center text-[#21ce99] transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(33,206,153,0.3)] border border-[#21ce99]/20">
-          <LayoutGrid size={20} strokeWidth={2.5} />
-        </button>
-
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#5e6673] hover:text-white hover:bg-white/5 transition-all">
-          <BarChart2 size={20} />
-        </button>
-
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#5e6673] hover:text-white hover:bg-white/5 transition-all">
-          <History size={20} />
-        </button>
-
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#5e6673] hover:text-white hover:bg-white/5 transition-all">
-          <Wallet size={20} />
-        </button>
-
+      {/* MAIN TOOLS */}
+      <div className="flex flex-col gap-2 w-full px-2">
+        {tools.map((tool) => (
+          <button
+            key={tool.id}
+            onClick={() => handleToolClick(tool.id)}
+            className={`p-2 rounded-lg transition-all group relative flex items-center justify-center
+              ${activeTool === tool.id 
+                ? 'bg-[#21ce99] text-black shadow-[0_0_10px_rgba(33,206,153,0.4)]' 
+                : 'text-[#8b9bb4] hover:bg-[#2a303c] hover:text-white'
+              }`}
+            title={tool.label}
+          >
+            {tool.icon}
+            
+            <span className="absolute left-12 bg-[#0b0e11] text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-[#2a2e39] pointer-events-none z-50">
+              {tool.label}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* Bottom Icons */}
-      <div className="mt-auto flex flex-col gap-6 w-full items-center">
-        
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#5e6673] hover:text-white hover:bg-white/5 transition-all">
-          <HelpCircle size={20} />
-        </button>
+      <div className="flex-1" />
 
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#5e6673] hover:text-white hover:bg-white/5 transition-all">
-          <Settings size={20} />
-        </button>
-
-        <div className="w-8 h-[1px] bg-white/5"></div>
-
-        <button className="w-10 h-10 rounded-xl flex items-center justify-center text-[#f4553b] hover:bg-[#f4553b]/10 transition-all">
-          <LogOut size={20} />
-        </button>
-
+      {/* BOTTOM TOOLS */}
+      <div className="flex flex-col gap-2 w-full px-2">
+        {bottomTools.map((tool) => (
+          <button
+            key={tool.id}
+            onClick={tool.action || (() => handleToolClick(tool.id))}
+            className="p-2 rounded-lg text-[#8b9bb4] hover:text-red-400 hover:bg-[#2a303c] transition-colors flex items-center justify-center"
+            title={tool.label}
+          >
+            {tool.icon}
+          </button>
+        ))}
       </div>
-
-    </aside>
+    </div>
   );
 }

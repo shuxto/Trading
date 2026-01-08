@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import Header from './components/Header'
 import OrderPanel from './components/OrderPanel'
-import Sidebar from './components/Sidebar'
-import DrawingToolbar from './components/DrawingToolbar'
+import Sidebar from './components/Sidebar' // This is the ONLY bar we need now
 import Chart from './components/Chart'
 import WorldMap from './components/WorldMap'
 
 export default function App() {
   const [orders, setOrders] = useState<any[]>([])
-  const [activeTool, setActiveTool] = useState<string | null>('crosshair');
+  // Default to 'crosshair' so standard clicking works immediately
+  const [activeTool, setActiveTool] = useState<string | null>(null); // CHANGED from 'crosshair' to null
 
   const handleTrade = (type: 'buy' | 'sell', amount: number) => {
     const newOrder = {
@@ -24,7 +24,6 @@ export default function App() {
 
   return (
     // IQ OPTION "AUTHENTIC" GRADIENT
-    // Top: #191f2e (Deep Midnight) -> Bottom: #2e3851 (Slate Blue)
     <div className="h-screen w-screen bg-gradient-to-b from-[#191f2e] to-[#2e3851] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#F07000] selection:text-white">
       
       {/* 1. MAP LAYER */}
@@ -35,18 +34,20 @@ export default function App() {
       
       <div className="flex-1 flex min-h-0 relative z-10">
         
-        <Sidebar />
-
-        <DrawingToolbar 
-          activeTool={activeTool} 
-          onToolChange={setActiveTool} 
+        {/* FIX: Use Sidebar with props and DELETE DrawingToolbar */}
+        <Sidebar 
+           activeTool={activeTool} 
+           onToolSelect={setActiveTool} 
+           onClear={() => console.log("Clear all clicked")} 
         />
+
+        {/* <DrawingToolbar />  <-- DELETED THIS DUPLICATE */}
         
         <main className="flex-1 relative flex flex-col pb-[80px] md:pb-0">
           <Chart 
              activeOrders={orders} 
              activeTool={activeTool}
-             onToolComplete={() => setActiveTool('crosshair')}
+             onToolComplete={() => setActiveTool('crosshair')} // Resets to crosshair after drawing a line
           />
         </main>
 

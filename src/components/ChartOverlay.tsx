@@ -53,7 +53,6 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
 
     if (!currentDrawing) {
       // START NEW DRAWING
-      // FIX: Check which tool is active
       const drawingType = activeTool === 'horizontal' ? 'horizontal' : 'trend';
 
       setCurrentDrawing({
@@ -103,11 +102,11 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
 
   return (
     <svg 
-      className="absolute inset-0 z-10 w-full h-full cursor-crosshair overflow-visible pointer-events-auto"
+      className="absolute inset-0 z-10 w-full h-full overflow-visible"
       onMouseDown={handleClick}
       onMouseMove={handleMouseMove}
       // Only enable pointer events when a drawing tool is active
-      style={{ pointerEvents: activeTool && activeTool !== 'crosshair' ? 'auto' : 'none' }}
+      style={{ pointerEvents: activeTool && activeTool !== 'crosshair' ? 'auto' : 'none', cursor: activeTool === 'crosshair' ? 'default' : 'crosshair' }}
     >
       {/* RENDER SAVED DRAWINGS */}
       {drawings.map(d => {
