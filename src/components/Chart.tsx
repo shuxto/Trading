@@ -35,17 +35,29 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
     const chart = createChart(chartContainerRef.current, {
       layout: { 
         background: { type: ColorType.Solid, color: 'transparent' }, 
-        textColor: '#9ca3af', // Lighter text color
+        textColor: '#9ca3af', 
+        // TRICK: Bigger font size forces the chart to space out grid lines (Bigger Boxes)
+
         attributionLogo: false 
       },
       grid: { 
-        // CLEANER LOOK: Very faint grid lines (0.05 opacity)
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)', style: 1, visible: true }, 
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)', style: 1, visible: true } 
+        // PRO GRID:
+        // 1. Visible: true
+        // 2. Opacity: 0.08 (Visible but not distracting)
+        vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1, visible: true }, 
+        horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1, visible: true } 
       },
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
-      timeScale: { timeVisible: true, secondsVisible: true, borderColor: '#2a2e39', rightOffset: 20, barSpacing: 6 },
+      timeScale: { 
+        timeVisible: true, 
+        secondsVisible: true, 
+        borderColor: '#2a2e39', 
+        rightOffset: 10, 
+        // BIGGER GRID BOXES:
+        // Increased from 6 to 15. This zooms the chart in by default.
+        barSpacing: 6, 
+      },
       rightPriceScale: { borderColor: 'transparent' },
       crosshair: {
         vertLine: { visible: true, labelVisible: true, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#1c2030' },
@@ -55,7 +67,12 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
     });
 
     const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: '#ffffff', topColor: 'rgba(255, 255, 255, 0.1)', bottomColor: 'rgba(255, 255, 255, 0)', lineWidth: 2, crosshairMarkerVisible: false,
+      lineColor: '#ffffff', 
+      // Flat fill (same top/bottom color) as requested
+      topColor: 'rgba(255, 255, 255, 0.1)', 
+      bottomColor: 'rgba(255, 255, 255, 0.1)', 
+      lineWidth: 2, 
+      crosshairMarkerVisible: true,
     });
 
     chartRef.current = chart;
@@ -154,7 +171,7 @@ export default function Chart({ activeOrders, activeTool, onToolComplete }: Char
         onToolComplete={onToolComplete}
       />
 
-      {/* GLOWING DOT */}
+      {/* GLOWING DOT (I kept this since it was in your provided code) */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}>
         <div className="absolute inset-0 rounded-full bg-[#21ce99]" style={{ animation: 'pulseRing 1.5s infinite ease-out' }}></div>
         <div className="absolute right-full top-1/2 -translate-y-1/2 w-[1000px] border-b border-dashed border-[#21ce99] opacity-30"></div>

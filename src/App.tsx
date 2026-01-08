@@ -23,13 +23,13 @@ export default function App() {
   }
 
   return (
-    // GRADIENT: Dark (#151820) at Top -> Blue (#2c3141) at Bottom
+    // GRADIENT BACKGROUND
     <div className="h-screen w-screen bg-gradient-to-b from-[#151820] to-[#2c3141] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
       
-      {/* Map sits quietly on top of the gradient */}
+      {/* 1. MAP LAYER */}
       <WorldMap />
-      
-      {/* --- MAIN INTERFACE --- */}
+
+      {/* 3. MAIN INTERFACE */}
       <Header />
       
       <div className="flex-1 flex min-h-0 relative z-10">

@@ -1,4 +1,4 @@
-import worldMapSvg from '../assets/images/worldmap.svg'; 
+import worldMapSvg from '../assets/images/worldmap.webp'; 
 
 export default function WorldMap() {
   return (
@@ -12,8 +12,8 @@ export default function WorldMap() {
         alt="World Map Command Center"
         // REMOVED: animate-pulse-slow
         // CHANGED: opacity-20 (Very faint)
-        className="w-[90%] md:w-[75%] h-auto max-w-[1400px] object-contain opacity-20" 
-        style={{ filter: 'drop-shadow(0 0 20px rgba(255, 255, 255, 0.05))' }}
+        className="w-[90%] md:w-[75%] h-auto max-w-[1600px] object-contain opacity-30" 
+        style={{ filter: 'drop-shadow(0 0 0px rgba(255, 255, 255, 0.05))' }}
       />
 
       {/* 3. SCANNER REMOVED (The "Old TV" thing is gone) */}
