@@ -7,12 +7,14 @@ import ChartOverlay from './ChartOverlay';
 interface ChartProps {
   activeOrders?: any[]; 
   activeTool: string | null;     
-  onToolComplete: () => void;    
+  onToolComplete: () => void; 
+  clearTrigger: number; 
+  removeSelectedTrigger: number; // NEW PROP: Fix added here
 }
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-export default function Chart({ activeTool, onToolComplete }: ChartProps) {
+export default function Chart({ activeTool, onToolComplete, clearTrigger, removeSelectedTrigger }: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   
@@ -29,29 +31,20 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const currentAnimatedPriceRef = useRef<number | null>(null);
 
-  // 1. NEW EFFECT: Toggle Crosshair lines ON/OFF dynamically
+  // VISIBILITY LOGIC
   useEffect(() => {
     if (!chartApi) return;
-
-    // Only show the crosshair lines if the active tool is explicitly 'crosshair'
     const isCrosshairActive = activeTool === 'crosshair';
-
     chartApi.applyOptions({
       crosshair: {
-        vertLine: { 
-          visible: isCrosshairActive, 
-          labelVisible: isCrosshairActive 
-        },
-        horzLine: { 
-          visible: isCrosshairActive, 
-          labelVisible: isCrosshairActive 
-        },
-        // We can keep the mode Normal, visibility controls the lines
+        vertLine: { visible: isCrosshairActive, labelVisible: isCrosshairActive },
+        horzLine: { visible: isCrosshairActive, labelVisible: isCrosshairActive },
         mode: CrosshairMode.Normal, 
       },
     });
   }, [chartApi, activeTool]);
 
+  // INITIALIZATION
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -68,15 +61,10 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
       timeScale: { 
-        timeVisible: true, 
-        secondsVisible: true, 
-        borderColor: '#2a2e39', 
-        rightOffset: 10, 
-        barSpacing: 6, 
+        timeVisible: true, secondsVisible: true, borderColor: '#2a2e39', rightOffset: 10, barSpacing: 6, 
       },
       rightPriceScale: { borderColor: 'transparent' },
       crosshair: {
-        // Initial state (will be updated by the effect above immediately)
         vertLine: { visible: false, labelVisible: false, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#1c2030' },
         horzLine: { visible: false, labelVisible: false, style: 3, width: 1, color: '#ffffff', labelBackgroundColor: '#21ce99' },
         mode: 0,
@@ -84,22 +72,15 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     });
 
     const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: '#ffffff', 
-      topColor: 'rgba(255, 255, 255, 0.1)', 
-      bottomColor: 'rgba(255, 255, 255, 0.1)', 
-      lineWidth: 2, 
-      crosshairMarkerVisible: true,
+      lineColor: '#ffffff', topColor: 'rgba(255, 255, 255, 0.1)', bottomColor: 'rgba(255, 255, 255, 0.1)', lineWidth: 2, crosshairMarkerVisible: true,
     });
 
     chartRef.current = chart;
     seriesRef.current = areaSeries;
-    
     setChartApi(chart);
     setSeriesApi(areaSeries);
 
-    chart.subscribeClick(() => {
-        setMenuState(prev => ({ ...prev, visible: false }));
-    });
+    chart.subscribeClick(() => setMenuState(prev => ({ ...prev, visible: false })));
 
     const handleRightClick = (event: MouseEvent) => {
         event.preventDefault(); 
@@ -109,10 +90,7 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     };
 
     chartContainerRef.current.addEventListener('contextmenu', handleRightClick);
-
-    const handleResize = () => {
-      if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
-    };
+    const handleResize = () => { if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight }); };
     window.addEventListener('resize', handleResize);
 
     return () => {
@@ -122,6 +100,7 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     };
   }, []); 
 
+  // DATA UPDATES
   useEffect(() => {
     if (seriesRef.current && candles.length > 0) {
       seriesRef.current.setData(candles);
@@ -130,6 +109,7 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
     }
   }, [candles]);
 
+  // ANIMATION LOOP
   useEffect(() => {
     let animationFrameId: number;
     const animate = () => {
@@ -177,18 +157,16 @@ export default function Chart({ activeTool, onToolComplete }: ChartProps) {
 
       <div className="absolute top-6 left-6 z-20 pointer-events-none mix-blend-difference"><h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">BTC/USD</h1></div>
 
-      {/* 2. DYNAMIC CURSOR CLASS: Switches between 'cursor-crosshair' and 'cursor-default' */}
-      <div 
-        ref={chartContainerRef} 
-        className={`w-full h-full relative ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} 
-      />
+      <div ref={chartContainerRef} className={`w-full h-full relative ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} />
 
-      {/* RENDER OVERLAY */}
+      {/* RENDER OVERLAY with all triggers */}
       <ChartOverlay 
         chart={chartApi} 
         series={seriesApi} 
         activeTool={activeTool}
         onToolComplete={onToolComplete}
+        clearTrigger={clearTrigger}
+        removeSelectedTrigger={removeSelectedTrigger} // PASSED DOWN
       />
 
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}>
