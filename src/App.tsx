@@ -23,8 +23,9 @@ export default function App() {
   }
 
   return (
-    // GRADIENT BACKGROUND
-    <div className="h-screen w-screen bg-gradient-to-b from-[#151820] to-[#2c3141] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#21ce99] selection:text-black">
+    // IQ OPTION "AUTHENTIC" GRADIENT
+    // Top: #191f2e (Deep Midnight) -> Bottom: #2e3851 (Slate Blue)
+    <div className="h-screen w-screen bg-gradient-to-b from-[#191f2e] to-[#2e3851] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#F07000] selection:text-white">
       
       {/* 1. MAP LAYER */}
       <WorldMap />

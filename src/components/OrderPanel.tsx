@@ -1,10 +1,13 @@
 import { motion } from "framer-motion";
+import { useClickSound } from '../hooks/useClickSound';
 
 interface OrderPanelProps {
   onTrade: (type: 'buy' | 'sell', amount: number) => void;
 }
 
 export default function OrderPanel({ onTrade }: OrderPanelProps) {
+  const playClick = useClickSound();
+
   return (
     // CHANGED: Glassmorphism styles
     <aside className="
@@ -40,7 +43,10 @@ export default function OrderPanel({ onTrade }: OrderPanelProps) {
         <motion.button 
           whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(33, 206, 153, 0.4)" }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onTrade('buy', 100)}
+          onClick={() => {
+            playClick(); // Added Sound
+            onTrade('buy', 100);
+          }}
           className="relative flex-1 md:flex-none h-10 md:h-12 rounded-lg bg-gradient-to-b from-[#21ce99] to-[#17a074] text-[#0b0e11] font-black text-sm md:text-lg tracking-wider overflow-hidden group shadow-lg"
         >
           <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-300 blur-md"></div>
@@ -53,7 +59,10 @@ export default function OrderPanel({ onTrade }: OrderPanelProps) {
         <motion.button 
           whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(244, 85, 59, 0.4)" }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => onTrade('sell', 100)}
+          onClick={() => {
+            playClick(); // Added Sound
+            onTrade('sell', 100);
+          }}
           className="relative flex-1 md:flex-none h-10 md:h-12 rounded-lg bg-gradient-to-b from-[#f4553b] to-[#c93b25] text-white font-black text-sm md:text-lg tracking-wider overflow-hidden group shadow-lg"
         >
           <div className="absolute inset-0 bg-white/20 translate-y-[-100%] group-hover:translate-y-[100%] transition-transform duration-300 blur-md"></div>

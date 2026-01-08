@@ -1,6 +1,9 @@
 import { User, ChevronDown } from 'lucide-react';
+import { useClickSound } from '../hooks/useClickSound';
 
 export default function Header() {
+  const playClick = useClickSound();
+
   return (
     <header className="h-14 border-b border-[#2a2e39] flex items-center justify-between px-6 bg-[#151a21]/80 backdrop-blur-md z-30 relative">
       
@@ -18,13 +21,19 @@ export default function Header() {
       <div className="flex items-center gap-4">
         
         {/* Balance Box (Glowing) */}
-        <div className="bg-[#0b0e11] px-4 py-1.5 rounded-lg border border-[#2a2e39] shadow-lg flex flex-col items-end group cursor-pointer hover:border-[#21ce99] transition-colors">
+        <div 
+          onClick={playClick} // Added Sound
+          className="bg-[#0b0e11] px-4 py-1.5 rounded-lg border border-[#2a2e39] shadow-lg flex flex-col items-end group cursor-pointer hover:border-[#21ce99] transition-colors"
+        >
           <span className="text-[#5e6673] text-[9px] font-bold uppercase">Total Balance</span>
           <span className="font-mono text-[#21ce99] font-bold text-sm tracking-wide shadow-[#21ce99]">$ 10,432.50</span>
         </div>
 
         {/* Profile Circle */}
-        <div className="w-9 h-9 rounded-full bg-[#2a303c] flex items-center justify-center hover:bg-[#3e4552] transition cursor-pointer border border-[#2a2e39]">
+        <div 
+          onClick={playClick} // Added Sound
+          className="w-9 h-9 rounded-full bg-[#2a303c] flex items-center justify-center hover:bg-[#3e4552] transition cursor-pointer border border-[#2a2e39]"
+        >
           <User size={18} className="text-[#8b9bb4]" />
         </div>
 
