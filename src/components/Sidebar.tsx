@@ -6,7 +6,6 @@ import {
   Hash, 
   Pencil, 
   Type, 
-  // Smile,  <-- REMOVED (Unused)
   Ruler, 
   Search, 
   Magnet, 
@@ -14,8 +13,13 @@ import {
   Eye, 
   Trash2, 
   Minus, 
-  // Layers, <-- REMOVED (Unused)
-  XSquare 
+  XSquare,
+  BarChart2,
+  Square,
+  Brush,
+  Highlighter,
+  MessageSquare, 
+  Tag            
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -37,13 +41,23 @@ export default function Sidebar({ activeTool, onToolSelect, onClear, onRemoveSel
         { id: 'horizontal', label: 'Horizontal Line', icon: <Minus size={16} /> },
       ]
     },
-    { id: 'fib', icon: <Hash size={20} />, label: 'Gann & Fibonacci', items: [{ id: 'fib', label: 'Fib Retracement', icon: <Hash size={16} /> }] },
+    { id: 'fib', icon: <Hash size={20} />, label: 'Gann & Fibonacci', items: [
+        { id: 'fib', label: 'Fib Retracement', icon: <Hash size={16} /> },
+        { id: 'fib_trend', label: 'Trend-Based Fib Ext', icon: <BarChart2 size={16} /> } 
+      ] 
+    },
     { id: 'shapes', icon: <Pencil size={20} />, label: 'Geometric Shapes', items: [
-        { id: 'brush', label: 'Brush', icon: <Pencil size={16} /> },
-        { id: 'rect', label: 'Rectangle', icon: <MousePointer2 size={16} /> } 
+        { id: 'brush', label: 'Brush', icon: <Brush size={16} /> },
+        { id: 'highlighter', label: 'Highlighter', icon: <Highlighter size={16} /> },
+        { id: 'rect', label: 'Rectangle', icon: <Square size={16} /> }
       ]
     },
-    { id: 'text', icon: <Type size={20} />, label: 'Text' },
+    { id: 'text', icon: <Type size={20} />, label: 'Text Tools', items: [
+        { id: 'text', label: 'Text', icon: <Type size={16} /> },
+        { id: 'comment', label: 'Comment', icon: <MessageSquare size={16} /> },
+        { id: 'price_label', label: 'Price Label', icon: <Tag size={16} /> }
+      ]
+    },
     { id: 'measure', icon: <Ruler size={20} />, label: 'Measure' },
     { id: 'zoom', icon: <Search size={20} />, label: 'Zoom' },
   ];
@@ -117,7 +131,6 @@ export default function Sidebar({ activeTool, onToolSelect, onClear, onRemoveSel
           )}
         </button>
 
-        {/* SUB-MENU POPUP */}
         {group.items && isOpen && (
           <div className="absolute left-full bottom-0 ml-2 bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-xl p-1 min-w-[160px] z-50 flex flex-col gap-1">
              {group.items.map((item: any) => (
