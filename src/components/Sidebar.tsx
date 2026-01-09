@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { 
-  MousePointer2, 
   TrendingUp, 
   Target, 
   Hash, 
@@ -15,7 +14,7 @@ import {
   Minus, 
   XSquare,
   BarChart2,
-  Square,
+  Square,       // Used for Rectangle
   Brush,
   Highlighter,
   MessageSquare, 

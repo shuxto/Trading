@@ -3,7 +3,6 @@ import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
 interface Drawing {
   id: number;
-  // Added 'measure' to the list
   type: 'trend' | 'horizontal' | 'fib' | 'rect' | 'brush' | 'highlighter' | 'text' | 'comment' | 'price_label' | 'measure';
   p1: { time: number; price: number };
   p2?: { time: number; price: number };
@@ -138,7 +137,7 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
       if (activeTool === 'horizontal') drawingType = 'horizontal';
       if (activeTool === 'fib') drawingType = 'fib';
       if (activeTool === 'rect') drawingType = 'rect';
-      if (activeTool === 'measure') drawingType = 'measure'; // Add Measure
+      if (activeTool === 'measure') drawingType = 'measure'; // Added Measure
 
       setCurrentDrawing({
         id: Date.now(),
@@ -209,7 +208,7 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
 
     const c1 = getCoords(d.p1);
     
-    // TEXT TOOLS RENDER
+    // TEXT TOOLS
     if (d.type === 'text') {
         if (!c1 || !c1.x || !c1.y) return null;
         return (<g {...commonProps}><text x={c1.x} y={c1.y} fill={isSelected ? '#F07000' : '#ffffff'} fontSize="14" fontWeight="bold" style={{ userSelect: 'none' }}>{d.text}</text></g>);
@@ -222,6 +221,7 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
         if (!c1 || !c1.x || !c1.y) return null;
         return (<g {...commonProps}><circle cx={c1.x} cy={c1.y} r="4" fill={strokeColor} /><line x1={c1.x} y1={c1.y} x2={c1.x + 20} y2={c1.y - 30} stroke={strokeColor} strokeWidth="1" /><rect x={c1.x + 20} y={c1.y - 50} width="120" height="40" rx="8" fill="#1e222d" stroke={strokeColor} strokeWidth={isSelected ? 2 : 1} /><text x={c1.x + 30} y={c1.y - 25} fill="#fff" fontSize="12" style={{ userSelect: 'none' }}>{d.text}</text></g>);
     }
+    // FREEHAND
     if (d.type === 'brush' || d.type === 'highlighter') {
         if (!d.points || d.points.length < 2) return null;
         const pathData = d.points.map((p, i) => { const c = getCoords(p); return (!c || c.x === null || c.y === null) ? '' : `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y}`; }).join(' ');
@@ -229,63 +229,47 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
         return (<g {...commonProps}><path d={pathData} fill="none" stroke={isHighlighter ? "#FFFF00" : strokeColor} strokeWidth={isHighlighter ? "20" : "2"} strokeLinecap="round" strokeLinejoin="round" opacity={isHighlighter ? 0.4 : 1} />{!isHighlighter && <path d={pathData} fill="none" stroke="transparent" strokeWidth="15" />}</g>)
     }
 
-    // 2-POINT TOOLS
     const c2 = d.p2 ? getCoords(d.p2) : null;
     if (!c1 || !c1.x || !c1.y) return null;
     const x1 = c1.x; const y1 = c1.y;
     const x2 = c2 ? (c2.x ?? x1) : x1; 
     const y2 = c2 ? (c2.y ?? y1) : y1;
 
-    // MEASURE TOOL (New Logic)
+    // MEASURE TOOL
     if (d.type === 'measure') {
         const left = Math.min(x1, x2);
         const top = Math.min(y1, y2);
         const width = Math.abs(x1 - x2);
         const height = Math.abs(y1 - y2);
         
-        // Stats Calculation
         const priceDiff = (d.p2?.price ?? d.p1.price) - d.p1.price;
         const percentDiff = (priceDiff / d.p1.price) * 100;
-        // Time diff in "bars" is hard to get exactly without full data array, using Seconds for now
-        // A rough hack: 1m = 60s. We can just show time.
-        const timeDiff = Math.abs((d.p2?.time ?? d.p1.time) - d.p1.time); 
+        // Simple approx time calc in minutes (assuming 1 unit = 1 sec if not proper timestamp, but good enough for visual)
+        const timeDiff = Math.abs((d.p2?.time ?? d.p1.time) - d.p1.time) / 60; 
         const isPositive = priceDiff >= 0;
-        const bg = isPositive ? '#2196f3' : '#2196f3'; // Blue standard for measure
+        const bg = '#2196f3'; // Measure Blue
         
         return (
              <g {...commonProps}>
-                {/* Background Box */}
                 <rect x={left} y={top} width={width} height={height} fill={bg} fillOpacity="0.2" stroke={bg} strokeWidth="1" />
-                
-                {/* Arrow Line */}
                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={bg} strokeWidth="2" strokeDasharray="4,4" />
-                
-                {/* Info Box (Centered) */}
-                <rect 
-                    x={left + (width/2) - 60} 
-                    y={top + (height/2) - 20} 
-                    width="120" height="40" 
-                    rx="4" fill="#131722" stroke={bg} strokeWidth="1" 
-                />
-                
-                {/* Stats Text */}
+                {/* Badge */}
+                <rect x={left + (width/2) - 60} y={top + (height/2) - 20} width="120" height="40" rx="4" fill="#131722" stroke={bg} strokeWidth="1" />
                 <text x={left + (width/2)} y={top + (height/2) - 4} textAnchor="middle" fill={isPositive ? '#4caf50' : '#f23645'} fontSize="11" fontWeight="bold">
                     {priceDiff >= 0 ? '+' : ''}{priceDiff.toFixed(2)} ({percentDiff.toFixed(2)}%)
                 </text>
                 <text x={left + (width/2)} y={top + (height/2) + 12} textAnchor="middle" fill="#8b9bb4" fontSize="10">
-                    {Math.round(timeDiff / 60)} min
+                    {Math.round(timeDiff)} min
                 </text>
              </g>
         )
     }
 
-    // RECTANGLE
+    // SHAPES
     if (d.type === 'rect') {
-        const left = Math.min(x1, x2);
-        const top = Math.min(y1, y2);
+        const left = Math.min(x1, x2); const top = Math.min(y1, y2);
         return (<g {...commonProps}><rect x={left} y={top} width={Math.abs(x1 - x2)} height={Math.abs(y1 - y2)} stroke={strokeColor} strokeWidth="2" fill={strokeColor} fillOpacity="0.1" />{!isPreview && (<><circle cx={x1} cy={y1} r="3" fill="#fff" /><circle cx={x2} cy={y2} r="3" fill="#fff" /></>)}</g>)
     }
-    // HORIZONTAL
     if (d.type === 'horizontal') {
       return (<g {...commonProps}><line x1="0" y1={y1} x2="100%" y2={y1} stroke="transparent" strokeWidth="15" /><line x1="0" y1={y1} x2="100%" y2={y1} stroke={isPreview ? "#ffffff" : strokeColor} strokeWidth={isSelected ? "3" : "2"} strokeDasharray={isPreview ? "5,5" : ""} /></g>);
     } 
