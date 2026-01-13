@@ -6,15 +6,15 @@ import {
   Pencil, 
   Type, 
   Ruler, 
-  Search, 
-  Magnet, 
+  ZoomIn,
   Lock, 
   Eye, 
+  EyeOff, // New icon for hidden state
   Trash2, 
   Minus, 
   XSquare,
   BarChart2,
-  Square,       // Used for Rectangle
+  Square,       
   Brush,
   Highlighter,
   MessageSquare, 
@@ -26,9 +26,24 @@ interface SidebarProps {
   onToolSelect: (tool: string | null) => void;
   onClear: () => void;
   onRemoveSelected: () => void;
+  
+  // NEW PROPS
+  isLocked: boolean;
+  onToggleLock: () => void;
+  isHidden: boolean;
+  onToggleHide: () => void;
 }
 
-export default function Sidebar({ activeTool, onToolSelect, onClear, onRemoveSelected }: SidebarProps) {
+export default function Sidebar({ 
+  activeTool, 
+  onToolSelect, 
+  onClear, 
+  onRemoveSelected,
+  isLocked,
+  onToggleLock,
+  isHidden,
+  onToggleHide
+}: SidebarProps) {
   
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
@@ -58,14 +73,28 @@ export default function Sidebar({ activeTool, onToolSelect, onClear, onRemoveSel
       ]
     },
     { id: 'measure', icon: <Ruler size={20} />, label: 'Measure' },
-    { id: 'zoom', icon: <Search size={20} />, label: 'Zoom' },
+    { id: 'zoom', icon: <ZoomIn size={20} />, label: 'Zoom' }, 
   ];
 
-  // BOTTOM TOOLS
+  // BOTTOM TOOLS (Removed Magnet, Updated Lock/Hide)
   const bottomTools = [
-    { id: 'magnet', icon: <Magnet size={20} />, label: 'Weak Magnet' },
-    { id: 'lock', icon: <Lock size={20} />, label: 'Lock All' },
-    { id: 'hide', icon: <Eye size={20} />, label: 'Hide All' },
+    // MAGNET REMOVED
+    { 
+      id: 'lock', 
+      icon: <Lock size={20} />, 
+      label: isLocked ? 'Unlock All' : 'Lock All',
+      action: 'custom',
+      isActive: isLocked,
+      onClick: onToggleLock 
+    },
+    { 
+      id: 'hide', 
+      icon: isHidden ? <EyeOff size={20} /> : <Eye size={20} />, 
+      label: isHidden ? 'Show All' : 'Hide All',
+      action: 'custom',
+      isActive: isHidden,
+      onClick: onToggleHide 
+    },
     { 
       id: 'delete', 
       icon: <Trash2 size={20} />, 
@@ -107,9 +136,11 @@ export default function Sidebar({ activeTool, onToolSelect, onClear, onRemoveSel
   };
 
   const renderToolButton = (group: any) => {
-    const isGroupActive = group.items 
-      ? group.items.some((item: any) => item.id === activeTool)
-      : activeTool === group.id;
+    const isGroupActive = group.isActive 
+      ? true 
+      : group.items 
+        ? group.items.some((item: any) => item.id === activeTool)
+        : activeTool === group.id;
 
     const isOpen = openGroupId === group.id;
 

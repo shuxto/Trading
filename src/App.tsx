@@ -4,15 +4,38 @@ import OrderPanel from './components/OrderPanel'
 import Sidebar from './components/Sidebar'
 import Chart from './components/Chart'
 import WorldMap from './components/WorldMap'
+import AssetSelector from './components/AssetSelector' 
+
+// Define the shape of our Asset State
+interface ActiveAssetState {
+  symbol: string;
+  displaySymbol: string;
+  name: string;
+  source: 'binance' | 'twelve';
+}
 
 export default function App() {
   const [orders, setOrders] = useState<any[]>([])
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
   
-  // 1. SIGNAL: Delete ALL
+  // TOOL SIGNALS
   const [clearTrigger, setClearTrigger] = useState<number>(0);
-  // 2. SIGNAL: Delete ONLY SELECTED (New)
   const [removeSelectedTrigger, setRemoveSelectedTrigger] = useState<number>(0);
+  
+  // DRAWING STATE
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isHidden, setIsHidden] = useState<boolean>(false);
+
+  // ASSET STATE (Fixed Types)
+  const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+  
+  // FIX: Explicitly tell TypeScript what this state can hold
+  const [activeAsset, setActiveAsset] = useState<ActiveAssetState>({ 
+    symbol: 'BTCUSDT', 
+    displaySymbol: 'BTC/USD', 
+    name: 'Bitcoin', 
+    source: 'binance' 
+  });
 
   const handleTrade = (type: 'buy' | 'sell', amount: number) => {
     const newOrder = {
@@ -23,14 +46,24 @@ export default function App() {
       status: 'active'
     }
     setOrders([newOrder, ...orders])
-    console.log("TRADE EXECUTED:", newOrder)
   }
 
   return (
     <div className="h-screen w-screen bg-gradient-to-b from-[#191f2e] to-[#2e3851] text-white flex flex-col overflow-hidden fixed inset-0 font-sans selection:bg-[#F07000] selection:text-white">
       
       <WorldMap />
-      <Header />
+      
+      <Header 
+        activeAsset={activeAsset} 
+        onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
+      />
+      
+      <AssetSelector 
+        isOpen={isAssetSelectorOpen} 
+        onClose={() => setIsAssetSelectorOpen(false)}
+        // Now this matches perfectly because activeAsset allows both sources
+        onSelect={setActiveAsset} 
+      />
       
       <div className="flex-1 flex min-h-0 relative z-10">
         
@@ -38,8 +71,11 @@ export default function App() {
            activeTool={activeTool} 
            onToolSelect={setActiveTool} 
            onClear={() => setClearTrigger(Date.now())}
-           // NEW: Pass the "Remove Selected" signal
-           onRemoveSelected={() => setRemoveSelectedTrigger(Date.now())} 
+           onRemoveSelected={() => setRemoveSelectedTrigger(Date.now())}
+           isLocked={isLocked}
+           onToggleLock={() => setIsLocked(!isLocked)}
+           isHidden={isHidden}
+           onToggleHide={() => setIsHidden(!isHidden)}
         />
         
         <main className="flex-1 relative flex flex-col pb-[80px] md:pb-0">
@@ -48,8 +84,14 @@ export default function App() {
              activeTool={activeTool}
              onToolComplete={() => setActiveTool('crosshair')}
              clearTrigger={clearTrigger}
-             // NEW: Pass it down to the chart
              removeSelectedTrigger={removeSelectedTrigger}
+             isLocked={isLocked}
+             isHidden={isHidden}
+             
+             // PASS ASSET DATA TO CHART
+             symbol={activeAsset.symbol}
+             displaySymbol={activeAsset.displaySymbol} 
+             source={activeAsset.source} 
           />
         </main>
 

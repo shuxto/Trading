@@ -3,7 +3,7 @@ import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
 interface Drawing {
   id: number;
-  type: 'trend' | 'horizontal' | 'fib' | 'rect' | 'brush' | 'highlighter' | 'text' | 'comment' | 'price_label' | 'measure';
+  type: 'trend' | 'horizontal' | 'fib' | 'rect' | 'brush' | 'highlighter' | 'text' | 'comment' | 'price_label' | 'measure' | 'zoom';
   p1: { time: number; price: number };
   p2?: { time: number; price: number };
   points?: { time: number; price: number }[];
@@ -17,6 +17,8 @@ interface OverlayProps {
   onToolComplete: () => void;
   clearTrigger: number;
   removeSelectedTrigger: number;
+  isLocked: boolean; // NEW
+  isHidden: boolean; // NEW
 }
 
 const FIB_LEVELS = [
@@ -29,7 +31,16 @@ const FIB_LEVELS = [
   { level: 1, color: '#787b86' },
 ];
 
-export default function ChartOverlay({ chart, series, activeTool, onToolComplete, clearTrigger, removeSelectedTrigger }: OverlayProps) {
+export default function ChartOverlay({ 
+  chart, 
+  series, 
+  activeTool, 
+  onToolComplete, 
+  clearTrigger, 
+  removeSelectedTrigger,
+  isLocked,
+  isHidden
+}: OverlayProps) {
   
   const [drawings, setDrawings] = useState<Drawing[]>(() => {
     const saved = localStorage.getItem('chart_drawings');
@@ -61,6 +72,9 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If locked, disable deletion key
+      if (isLocked) return;
+
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
         setDrawings(prev => prev.filter(d => d.id !== selectedId));
         setSelectedId(null);
@@ -68,7 +82,7 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId]);
+  }, [selectedId, isLocked]); // Depend on isLocked
 
   useEffect(() => {
     if (!chart) return;
@@ -84,6 +98,9 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
   // --- INTERACTION LOGIC ---
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // If Hidden, don't allow drawing
+    if (isHidden) return;
+
     if (!chart || !series || !activeTool || activeTool === 'crosshair') return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -97,7 +114,7 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
     const timeNum = time as number;
     const point = { time: timeNum, price };
 
-    // 1. INSTANT TEXT TOOLS (Browser Prompt)
+    // 1. INSTANT TEXT TOOLS
     if (activeTool === 'text' || activeTool === 'comment' || activeTool === 'price_label') {
         let content = '';
         if (activeTool === 'price_label') {
@@ -131,13 +148,14 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
         return;
     }
 
-    // 3. CLICK-TO-CLICK TOOLS (Line, Fib, Rect, MEASURE)
+    // 3. STANDARD TOOLS
     if (!currentDrawing) {
       let drawingType: Drawing['type'] = 'trend';
       if (activeTool === 'horizontal') drawingType = 'horizontal';
       if (activeTool === 'fib') drawingType = 'fib';
       if (activeTool === 'rect') drawingType = 'rect';
-      if (activeTool === 'measure') drawingType = 'measure'; // Added Measure
+      if (activeTool === 'measure') drawingType = 'measure';
+      if (activeTool === 'zoom') drawingType = 'zoom';
 
       setCurrentDrawing({
         id: Date.now(),
@@ -178,6 +196,19 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
   };
 
   const handleMouseUp = () => {
+    if (currentDrawing && currentDrawing.type === 'zoom') {
+        const t1 = currentDrawing.p1.time;
+        const t2 = currentDrawing.p2?.time || t1;
+        if (t1 !== t2 && chart) {
+            const from = Math.min(t1, t2) as Time;
+            const to = Math.max(t1, t2) as Time;
+            chart.timeScale().setVisibleRange({ from, to });
+        }
+        setCurrentDrawing(null);
+        onToolComplete();
+        return;
+    }
+
     if (currentDrawing && (currentDrawing.type === 'brush' || currentDrawing.type === 'highlighter')) {
         setDrawings([...drawings, currentDrawing]);
         setCurrentDrawing(null);
@@ -197,13 +228,19 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
 
     const handleLineMouseDown = (e: React.MouseEvent) => {
       e.stopPropagation(); 
-      if (!isPreview) setSelectedId(d.id);
+      // If Locked, do NOT select
+      if (!isPreview && !isLocked) setSelectedId(d.id);
     };
 
     const commonProps = {
       key: d.id || 'preview',
       onMouseDown: handleLineMouseDown,
-      style: { cursor: 'pointer', pointerEvents: 'auto' as const }
+      style: { 
+          // If Locked, pointer events none (clicks pass through)
+          // If Not Locked, pointer events auto (can be clicked)
+          pointerEvents: isLocked ? 'none' as const : 'auto' as const, 
+          cursor: isLocked ? 'default' : 'pointer' 
+      }
     };
 
     const c1 = getCoords(d.p1);
@@ -235,25 +272,21 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
     const x2 = c2 ? (c2.x ?? x1) : x1; 
     const y2 = c2 ? (c2.y ?? y1) : y1;
 
-    // MEASURE TOOL
+    // MEASURE
     if (d.type === 'measure') {
         const left = Math.min(x1, x2);
         const top = Math.min(y1, y2);
         const width = Math.abs(x1 - x2);
         const height = Math.abs(y1 - y2);
-        
         const priceDiff = (d.p2?.price ?? d.p1.price) - d.p1.price;
         const percentDiff = (priceDiff / d.p1.price) * 100;
-        // Simple approx time calc in minutes (assuming 1 unit = 1 sec if not proper timestamp, but good enough for visual)
         const timeDiff = Math.abs((d.p2?.time ?? d.p1.time) - d.p1.time) / 60; 
         const isPositive = priceDiff >= 0;
-        const bg = '#2196f3'; // Measure Blue
-        
+        const bg = '#2196f3';
         return (
              <g {...commonProps}>
                 <rect x={left} y={top} width={width} height={height} fill={bg} fillOpacity="0.2" stroke={bg} strokeWidth="1" />
                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={bg} strokeWidth="2" strokeDasharray="4,4" />
-                {/* Badge */}
                 <rect x={left + (width/2) - 60} y={top + (height/2) - 20} width="120" height="40" rx="4" fill="#131722" stroke={bg} strokeWidth="1" />
                 <text x={left + (width/2)} y={top + (height/2) - 4} textAnchor="middle" fill={isPositive ? '#4caf50' : '#f23645'} fontSize="11" fontWeight="bold">
                     {priceDiff >= 0 ? '+' : ''}{priceDiff.toFixed(2)} ({percentDiff.toFixed(2)}%)
@@ -265,11 +298,19 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
         )
     }
 
-    // SHAPES
+    // ZOOM BOX
+    if (d.type === 'zoom') {
+        const left = Math.min(x1, x2); const top = Math.min(y1, y2);
+        const width = Math.abs(x1 - x2); const height = Math.abs(y1 - y2);
+        return (<g {...commonProps}><rect x={left} y={top} width={width} height={height} fill="#3b82f6" fillOpacity="0.1" stroke="#3b82f6" strokeWidth="1" strokeDasharray="5,5" /></g>);
+    }
+
+    // RECT
     if (d.type === 'rect') {
         const left = Math.min(x1, x2); const top = Math.min(y1, y2);
         return (<g {...commonProps}><rect x={left} y={top} width={Math.abs(x1 - x2)} height={Math.abs(y1 - y2)} stroke={strokeColor} strokeWidth="2" fill={strokeColor} fillOpacity="0.1" />{!isPreview && (<><circle cx={x1} cy={y1} r="3" fill="#fff" /><circle cx={x2} cy={y2} r="3" fill="#fff" /></>)}</g>)
     }
+    // HORIZONTAL
     if (d.type === 'horizontal') {
       return (<g {...commonProps}><line x1="0" y1={y1} x2="100%" y2={y1} stroke="transparent" strokeWidth="15" /><line x1="0" y1={y1} x2="100%" y2={y1} stroke={isPreview ? "#ffffff" : strokeColor} strokeWidth={isSelected ? "3" : "2"} strokeDasharray={isPreview ? "5,5" : ""} /></g>);
     } 
@@ -304,7 +345,12 @@ export default function ChartOverlay({ chart, series, activeTool, onToolComplete
         <rect width="100%" height="100%" fill="transparent" style={{ pointerEvents: 'auto' }} onMouseDown={(e) => { e.stopPropagation(); setSelectedId(null); }} />
       )}
       
-      {drawings.map(d => renderLine(d))}
+      {/* IF HIDDEN: ONLY show Current Drawing (so you can still draw). 
+         Hide all existing "drawings".
+      */}
+      {!isHidden && drawings.map(d => renderLine(d))}
+      
+      {/* Always show what you are currently drawing */}
       {currentDrawing && renderLine(currentDrawing, true)}
     </svg>
   );

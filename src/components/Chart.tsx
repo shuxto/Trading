@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi, CrosshairMode } from 'lightweight-charts';
-import { useBinanceData } from '../hooks/useBinanceData';
+import { useMarketData } from '../hooks/useMarketData'; // ✅ FIXED IMPORT
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
 
@@ -9,12 +9,28 @@ interface ChartProps {
   activeTool: string | null;     
   onToolComplete: () => void; 
   clearTrigger: number; 
-  removeSelectedTrigger: number; // NEW PROP: Fix added here
+  removeSelectedTrigger: number; 
+  isLocked: boolean;
+  isHidden: boolean;
+  // ✅ NEW PROPS to support Asset Switching
+  symbol: string;
+  displaySymbol: string;
+  source: 'binance' | 'twelve';
 }
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-export default function Chart({ activeTool, onToolComplete, clearTrigger, removeSelectedTrigger }: ChartProps) {
+export default function Chart({ 
+  activeTool, 
+  onToolComplete, 
+  clearTrigger, 
+  removeSelectedTrigger, 
+  isLocked, 
+  isHidden,
+  symbol,        // ✅ RECEIVED FROM APP
+  displaySymbol, // ✅ RECEIVED FROM APP
+  source         // ✅ RECEIVED FROM APP
+}: ChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   
@@ -26,12 +42,13 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
   const [chartApi, setChartApi] = useState<IChartApi | null>(null);
   const [seriesApi, setSeriesApi] = useState<ISeriesApi<"Area"> | null>(null);
 
-  const { candles, currentPrice, lastCandleTime } = useBinanceData(interval);
+  // ✅ FIXED HOOK CALL: Uses the dynamic symbol and source
+  const { candles, currentPrice, lastCandleTime } = useMarketData(symbol, interval, source);
+  
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const currentAnimatedPriceRef = useRef<number | null>(null);
 
-  // VISIBILITY LOGIC
   useEffect(() => {
     if (!chartApi) return;
     const isCrosshairActive = activeTool === 'crosshair';
@@ -44,7 +61,6 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
     });
   }, [chartApi, activeTool]);
 
-  // INITIALIZATION
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -100,7 +116,6 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
     };
   }, []); 
 
-  // DATA UPDATES
   useEffect(() => {
     if (seriesRef.current && candles.length > 0) {
       seriesRef.current.setData(candles);
@@ -109,7 +124,6 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
     }
   }, [candles]);
 
-  // ANIMATION LOOP
   useEffect(() => {
     let animationFrameId: number;
     const animate = () => {
@@ -155,7 +169,10 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
         ))}
       </div>
 
-      <div className="absolute top-6 left-6 z-20 pointer-events-none mix-blend-difference"><h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">BTC/USD</h1></div>
+      {/* DYNAMIC TITLE (BTC/USD, GOLD, etc) */}
+      <div className="absolute top-6 left-6 z-20 pointer-events-none mix-blend-difference">
+        <h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">{displaySymbol}</h1>
+      </div>
 
       <div ref={chartContainerRef} className={`w-full h-full relative ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} />
 
@@ -166,7 +183,10 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
         activeTool={activeTool}
         onToolComplete={onToolComplete}
         clearTrigger={clearTrigger}
-        removeSelectedTrigger={removeSelectedTrigger} // PASSED DOWN
+        removeSelectedTrigger={removeSelectedTrigger}
+        // PASSED DOWN
+        isLocked={isLocked}
+        isHidden={isHidden}
       />
 
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}>
@@ -176,7 +196,7 @@ export default function Chart({ activeTool, onToolComplete, clearTrigger, remove
       
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div><span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE BINANCE FEED</span></div>
+          <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div><span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE MARKET FEED</span></div>
           <div className="h-3 w-[1px] bg-[#2a2e39]"></div>
           <span className="text-[10px] text-white font-mono font-bold">{currentPrice ? currentPrice.toFixed(2) : '---'}</span>
         </div>
