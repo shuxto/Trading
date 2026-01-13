@@ -1,83 +1,89 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, Copy, RefreshCcw } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCcw, Bell } from 'lucide-react';
 
 interface ChartContextMenuProps {
   x: number;
   y: number;
   price: number;
   onClose: () => void;
-  onAction: (action: string, price: number) => void;
+  onAction: (action: string, payload?: any) => void;
 }
 
 export default function ChartContextMenu({ x, y, price, onClose, onAction }: ChartContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close if clicking outside
+  // Close when clicking outside
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
+
+  // Prevent menu from going off-screen
+  const adjustedX = Math.min(x, window.innerWidth - 220);
+  const adjustedY = Math.min(y, window.innerHeight - 250);
 
   return (
     <AnimatePresence>
       <motion.div
         ref={menuRef}
-        initial={{ opacity: 0, scale: 0.9, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.1 }}
-        style={{ top: y, left: x }}
-        className="fixed z-[999] min-w-[180px] bg-[#151a21]/95 backdrop-blur-xl border border-[#2a2e39] rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col py-1"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.05 }}
+        className="fixed z-[1000] w-56 bg-[#1e222d] border border-[#2a2e39] shadow-2xl rounded-lg overflow-hidden py-1 text-sm font-sans select-none"
+        style={{ left: adjustedX, top: adjustedY }}
+        onContextMenu={(e) => e.preventDefault()}
       >
-        
-        {/* PRICE HEADER */}
-        <div className="px-3 py-2 text-[10px] text-[#5e6673] font-mono border-b border-[#2a2e39] mb-1">
-          PRICE: <span className="text-white font-bold">${price.toFixed(2)}</span>
+        {/* HEADER */}
+        <div className="px-3 py-2 border-b border-[#2a2e39] flex justify-between items-center bg-[#2a2e39]/30">
+           <span className="text-[#8b9bb4] text-[10px] font-bold uppercase tracking-wider">Trading</span>
+           <span className="font-mono text-white font-bold text-xs">${price.toFixed(2)}</span>
         </div>
 
-        {/* MENU ITEMS */}
-        <button 
-          onClick={() => onAction('buy', price)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-[#21ce99] hover:bg-[#21ce99]/10 transition-colors text-left"
-        >
-          <TrendingUp size={16} /> 
-          <span className="font-bold">Buy Limit</span>
-        </button>
+        {/* ACTIONS */}
+        <div className="py-1">
+          <button 
+            onClick={() => onAction('buy_limit', { price })}
+            className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-[#2a2e39] text-[#b2b5be] hover:text-[#21ce99] transition-colors group"
+          >
+            <TrendingUp size={14} className="group-hover:text-[#21ce99]" />
+            <div className="flex flex-col leading-none">
+                <span className="text-xs font-bold text-white">Buy Limit</span>
+                <span className="text-[9px] opacity-60">Execute Long here</span>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => onAction('sell_limit', { price })}
+            className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-[#2a2e39] text-[#b2b5be] hover:text-[#f23645] transition-colors group"
+          >
+            <TrendingDown size={14} className="group-hover:text-[#f23645]" />
+            <div className="flex flex-col leading-none">
+                <span className="text-xs font-bold text-white">Sell Limit</span>
+                <span className="text-[9px] opacity-60">Execute Short here</span>
+            </div>
+          </button>
+        </div>
 
-        <button 
-          onClick={() => onAction('sell', price)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-[#f4553b] hover:bg-[#f4553b]/10 transition-colors text-left"
-        >
-          <TrendingDown size={16} /> 
-          <span className="font-bold">Sell Limit</span>
-        </button>
+        <div className="h-[1px] bg-[#2a2e39] my-1" />
 
-        <div className="h-[1px] bg-[#2a2e39] my-1 mx-2"></div>
-
-        <button 
-          onClick={() => {
-            navigator.clipboard.writeText(price.toString());
-            onClose();
-          }}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-[#8b9bb4] hover:bg-[#2a303c] transition-colors text-left"
-        >
-          <Copy size={16} /> 
-          <span>Copy Price</span>
-        </button>
-
-        <button 
-          onClick={() => onAction('reset', 0)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-[#8b9bb4] hover:bg-[#2a303c] transition-colors text-left"
-        >
-          <RefreshCcw size={16} /> 
-          <span>Reset View</span>
-        </button>
+        {/* UTILITIES */}
+        <div className="py-1">
+          <button onClick={() => onAction('reset')} className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-[#2a2e39] text-[#b2b5be] hover:text-white transition-colors">
+            <RefreshCcw size={14} />
+            <span className="text-xs">Reset View</span>
+          </button>
+          <button onClick={() => onAction('alert')} className="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-[#2a2e39] text-[#b2b5be] hover:text-white transition-colors">
+            <Bell size={14} />
+            <span className="text-xs">Add Alert</span>
+          </button>
+        </div>
 
       </motion.div>
     </AnimatePresence>

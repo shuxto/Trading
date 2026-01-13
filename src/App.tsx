@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useState } from 'react'
 import Header from './components/Header'
 import OrderPanel from './components/OrderPanel'
@@ -7,7 +6,7 @@ import Chart from './components/Chart'
 import WorldMap from './components/WorldMap'
 import AssetSelector from './components/AssetSelector'
 import PremiumModal from './components/PremiumModal'
-import { useMarketData } from './hooks/useMarketData' // ✅ Data Hook is now here
+import { useMarketData } from './hooks/useMarketData' 
 import { type Order, type ActiveAsset } from './types'
 
 export default function App() {
@@ -32,20 +31,26 @@ export default function App() {
     source: 'binance' 
   });
   
-  // Timeframe State (Lifted so we can pass it to useMarketData)
+  // Timeframe State
   const [timeframe, setTimeframe] = useState('1m');
 
-  // ✅ FETCH DATA HERE (Single Source of Truth)
+  // Fetch Data
   const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(
     activeAsset.symbol, 
     timeframe, 
     activeAsset.source
   );
 
+  // --- TRADING HANDLERS ---
+  
   const handleTrade = (newOrder: Order) => {
-    // We just prepend the new order to the list
     setOrders([newOrder, ...orders])
     console.log("Order Executed:", newOrder);
+  }
+
+  // ✅ NEW: Handle closing orders from the Chart Overlay
+  const handleCloseOrder = (orderId: number) => {
+    setOrders(prevOrders => prevOrders.filter(o => o.id !== orderId));
   }
 
   return (
@@ -84,7 +89,7 @@ export default function App() {
         
         <main className="flex-1 relative flex flex-col pb-[80px] md:pb-0">
           <Chart 
-             // Data Props (Passed Down)
+             // Data Props
              candles={candles}
              currentPrice={currentPrice}
              lastCandleTime={lastCandleTime}
@@ -94,8 +99,12 @@ export default function App() {
              activeTimeframe={timeframe}
              onTimeframeChange={setTimeframe}
 
-             // Tool Props
+             // ✅ TRADING PROPS (Fixed the error)
              activeOrders={orders} 
+             onTrade={handleTrade}
+             onCloseOrder={handleCloseOrder}
+
+             // Tool Props
              activeTool={activeTool}
              onToolComplete={() => setActiveTool('crosshair')}
              clearTrigger={clearTrigger}
@@ -108,7 +117,6 @@ export default function App() {
           />
         </main>
 
-        {/* ✅ PASS REAL PRICE TO PANEL */}
         <OrderPanel 
           currentPrice={currentPrice} 
           activeSymbol={activeAsset.symbol}

@@ -1,19 +1,14 @@
-// src/types/index.ts
-
 export interface Order {
   id: number;
-  type: 'buy' | 'sell';   // Buy = Long, Sell = Short
-  symbol: string;         // e.g. BTCUSDT
+  type: 'buy' | 'sell';
+  symbol: string;
   entryPrice: number;
-  
-  // Position Details
-  margin: number;         // Your actual investment (e.g., $100)
-  leverage: number;       // Risk multiplier (e.g., 20x)
-  size: number;           // Total position value (Margin * Leverage)
-  liquidationPrice: number; // The price where you lose everything
-  
-  pnl?: number;           // Unrealized Profit/Loss
+  margin: number;
+  leverage: number;
+  size: number;
+  liquidationPrice: number;
   status: 'active' | 'closed';
+  pnl?: number; // Optional, calculated on the fly usually
 }
 
 export interface Asset {
@@ -27,7 +22,6 @@ export interface Asset {
   logo: string;
 }
 
-// Lightweight version for App state
 export interface ActiveAsset {
   symbol: string;
   displaySymbol: string;
