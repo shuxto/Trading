@@ -1,146 +1,13 @@
 import { useState } from 'react';
 import { Search, TrendingUp, TrendingDown, X, Bitcoin, DollarSign, BarChart3, Droplets, Globe } from 'lucide-react';
-
-interface Asset {
-  symbol: string;
-  displaySymbol: string;
-  name: string;
-  type: 'crypto' | 'stock' | 'forex' | 'commodity';
-  price: number;
-  change: number;
-  source: 'binance' | 'twelve';
-  logo: string;
-}
+import { ASSETS } from '../constants/assets'; // ✅ Import Data
+import type { Asset } from '../types';         // ✅ Import Type
 
 interface AssetSelectorProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (asset: Asset) => void;
 }
-
-const ASSETS: Asset[] = [
-  // --- CRYPTO (CoinCap CDN) ---
-  { 
-    symbol: 'BTCUSDT', 
-    displaySymbol: 'BTC/USD', 
-    name: 'Bitcoin', 
-    type: 'crypto', 
-    price: 43250.00, 
-    change: 2.5, 
-    source: 'binance',
-    logo: 'https://assets.coincap.io/assets/icons/btc@2x.png' 
-  },
-  { 
-    symbol: 'ETHUSDT', 
-    displaySymbol: 'ETH/USD', 
-    name: 'Ethereum', 
-    type: 'crypto', 
-    price: 2250.00, 
-    change: -1.2, 
-    source: 'binance',
-    logo: 'https://assets.coincap.io/assets/icons/eth@2x.png' 
-  },
-  { 
-    symbol: 'SOLUSDT', 
-    displaySymbol: 'SOL/USD', 
-    name: 'Solana', 
-    type: 'crypto', 
-    price: 98.50, 
-    change: 5.4, 
-    source: 'binance',
-    logo: 'https://assets.coincap.io/assets/icons/sol@2x.png' 
-  },
-  { 
-    symbol: 'XRPUSDT', 
-    displaySymbol: 'XRP/USD', 
-    name: 'Ripple', 
-    type: 'crypto', 
-    price: 0.55, 
-    change: 0.8, 
-    source: 'binance',
-    logo: 'https://assets.coincap.io/assets/icons/xrp@2x.png' 
-  },
-  
-  // --- STOCKS (Simple Icons CDN - Guaranteed to work) ---
-  { 
-    symbol: 'AAPL', 
-    displaySymbol: 'AAPL', 
-    name: 'Apple Inc.', 
-    type: 'stock', 
-    price: 185.50, 
-    change: 0.8, 
-    source: 'twelve',
-    // Official Apple Logo (White)
-    logo: 'https://cdn.simpleicons.org/apple/white' 
-  },
-  { 
-    symbol: 'TSLA', 
-    displaySymbol: 'TSLA', 
-    name: 'Tesla, Inc.', 
-    type: 'stock', 
-    price: 240.10, 
-    change: -2.1, 
-    source: 'twelve',
-    // Official Tesla Logo (Red)
-    logo: 'https://cdn.simpleicons.org/tesla/e82127' 
-  },
-  { 
-    symbol: 'NVDA', 
-    displaySymbol: 'NVDA', 
-    name: 'NVIDIA Corp', 
-    type: 'stock', 
-    price: 550.00, 
-    change: 3.2, 
-    source: 'twelve',
-    // Official Nvidia Logo (Green)
-    logo: 'https://cdn.simpleicons.org/nvidia/76b900' 
-  },
-
-  // --- FOREX (Flag CDN) ---
-  { 
-    symbol: 'EUR/USD', 
-    displaySymbol: 'EUR/USD', 
-    name: 'Euro / US Dollar', 
-    type: 'forex', 
-    price: 1.0950, 
-    change: 0.1, 
-    source: 'twelve',
-    logo: 'https://flagcdn.com/w80/eu.png' 
-  },
-  { 
-    symbol: 'GBP/USD', 
-    displaySymbol: 'GBP/USD', 
-    name: 'British Pound', 
-    type: 'forex', 
-    price: 1.2700, 
-    change: -0.05, 
-    source: 'twelve',
-    logo: 'https://flagcdn.com/w80/gb.png' 
-  },
-  { 
-    symbol: 'USD/JPY', 
-    displaySymbol: 'USD/JPY', 
-    name: 'US Dollar / Yen', 
-    type: 'forex', 
-    price: 145.20, 
-    change: 0.3, 
-    source: 'twelve',
-    logo: 'https://flagcdn.com/w80/jp.png' 
-  },
-
-  // --- COMMODITIES (CoinCap Assets - Best looking gold coin) ---
-  { 
-    symbol: 'XAU/USD', 
-    displaySymbol: 'Gold', 
-    name: 'Gold Spot / USD', 
-    type: 'commodity', 
-    price: 2045.50, 
-    change: 1.1, 
-    source: 'twelve',
-    // Paxos Gold Icon (Looks exactly like a Gold Coin)
-    logo: 'https://assets.coincap.io/assets/icons/paxg@2x.png' 
-  },
-];
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -224,10 +91,7 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
               className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-all border border-transparent hover:border-white/5 active:scale-[0.99]"
             >
               <div className="flex items-center gap-4">
-                {/* LOGO AREA */}
                 <div className="w-10 h-10 rounded-full bg-white/5 p-2 flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all overflow-hidden relative">
-                  
-                  {/* REAL IMAGE */}
                   <img 
                     src={asset.logo} 
                     alt={asset.name} 
@@ -237,8 +101,6 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
                       e.currentTarget.parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
                     }} 
                   />
-                  
-                  {/* FALLBACK ICON (Hidden unless img fails) */}
                   <div className="fallback-icon hidden absolute inset-0 flex items-center justify-center">
                      {getFallbackIcon(asset.type)}
                   </div>
@@ -269,7 +131,6 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
           )}
         </div>
 
-        {/* FOOTER */}
         <div className="p-3 border-t border-white/5 bg-[#0b0e11]/30 text-[10px] text-center text-[#5e6673]">
           Data provided by <span className="text-[#21ce99]">Binance</span> & <span className="text-[#21ce99]">Twelve Data</span>
         </div>

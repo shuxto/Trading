@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useState } from 'react'
 import Header from './components/Header'
 import OrderPanel from './components/OrderPanel'
@@ -5,44 +6,46 @@ import Sidebar from './components/Sidebar'
 import Chart from './components/Chart'
 import WorldMap from './components/WorldMap'
 import AssetSelector from './components/AssetSelector'
-import PremiumModal from './components/PremiumModal' // ✅ ADDED IMPORT
-
-interface ActiveAssetState {
-  symbol: string;
-  displaySymbol: string;
-  name: string;
-  source: 'binance' | 'twelve';
-}
+import PremiumModal from './components/PremiumModal'
+import { useMarketData } from './hooks/useMarketData' // ✅ Data Hook is now here
+import { type Order, type ActiveAsset } from './types'
 
 export default function App() {
-  const [orders, setOrders] = useState<any[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
   
+  // Triggers
   const [clearTrigger, setClearTrigger] = useState<number>(0);
   const [removeSelectedTrigger, setRemoveSelectedTrigger] = useState<number>(0);
   
+  // Layout State
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isHidden, setIsHidden] = useState<boolean>(false);
-
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
-  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false); // ✅ ADDED STATE
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   
-  const [activeAsset, setActiveAsset] = useState<ActiveAssetState>({ 
+  // Asset State
+  const [activeAsset, setActiveAsset] = useState<ActiveAsset>({ 
     symbol: 'BTCUSDT', 
     displaySymbol: 'BTC/USD', 
     name: 'Bitcoin', 
     source: 'binance' 
   });
+  
+  // Timeframe State (Lifted so we can pass it to useMarketData)
+  const [timeframe, setTimeframe] = useState('1m');
 
-  const handleTrade = (type: 'buy' | 'sell', amount: number) => {
-    const newOrder = {
-      id: Date.now(),
-      type,
-      entryPrice: 0, 
-      amount,
-      status: 'active'
-    }
+  // ✅ FETCH DATA HERE (Single Source of Truth)
+  const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(
+    activeAsset.symbol, 
+    timeframe, 
+    activeAsset.source
+  );
+
+  const handleTrade = (newOrder: Order) => {
+    // We just prepend the new order to the list
     setOrders([newOrder, ...orders])
+    console.log("Order Executed:", newOrder);
   }
 
   return (
@@ -61,7 +64,6 @@ export default function App() {
         onSelect={setActiveAsset} 
       />
 
-      {/* ✅ ADDED MODAL */}
       <PremiumModal 
         isOpen={isPremiumModalOpen} 
         onClose={() => setIsPremiumModalOpen(false)} 
@@ -82,6 +84,17 @@ export default function App() {
         
         <main className="flex-1 relative flex flex-col pb-[80px] md:pb-0">
           <Chart 
+             // Data Props (Passed Down)
+             candles={candles}
+             currentPrice={currentPrice}
+             lastCandleTime={lastCandleTime}
+             isLoading={isLoading}
+             
+             // Timeframe Props
+             activeTimeframe={timeframe}
+             onTimeframeChange={setTimeframe}
+
+             // Tool Props
              activeOrders={orders} 
              activeTool={activeTool}
              onToolComplete={() => setActiveTool('crosshair')}
@@ -91,14 +104,16 @@ export default function App() {
              isHidden={isHidden}
              symbol={activeAsset.symbol}
              displaySymbol={activeAsset.displaySymbol} 
-             source={activeAsset.source}
-             
-             // ✅ PASS TRIGGER FUNCTION
              onTriggerPremium={() => setIsPremiumModalOpen(true)}
           />
         </main>
 
-        <OrderPanel onTrade={handleTrade} />
+        {/* ✅ PASS REAL PRICE TO PANEL */}
+        <OrderPanel 
+          currentPrice={currentPrice} 
+          activeSymbol={activeAsset.symbol}
+          onTrade={handleTrade} 
+        />
 
       </div>
     </div>
