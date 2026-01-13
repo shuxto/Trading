@@ -4,7 +4,7 @@ import { useClock } from '../hooks/useClock';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
-import { Lock, Loader2, Clock } from 'lucide-react';
+import { Lock, Loader2, Clock, AlertTriangle, X, Check } from 'lucide-react';
 import type { Order } from '../types';
 
 interface ChartProps {
@@ -53,6 +53,9 @@ export default function Chart({
     visible: false, x: 0, y: 0, price: 0
   });
 
+  // Confirmation Modal State
+  const [confirmAction, setConfirmAction] = useState<{ type: 'buy' | 'sell'; price: number } | null>(null);
+
   const [chartApi, setChartApi] = useState<IChartApi | null>(null);
   const [seriesApi, setSeriesApi] = useState<ISeriesApi<"Area"> | null>(null);
   
@@ -73,31 +76,48 @@ export default function Chart({
     if (chartRef.current) chartRef.current.timeScale().fitContent();
   };
 
-  const handleMenuAction = (action: string, payload?: any) => {
+  // ✅ FIX: Renamed 'payload' to '_payload' to silence the linter error
+  const handleMenuAction = (action: string, _payload?: any) => {
     if (action === 'reset' && chartRef.current) {
        chartRef.current.timeScale().fitContent();
     }
     
     if (action === 'buy_limit' || action === 'sell_limit') {
        const type = action === 'buy_limit' ? 'buy' : 'sell';
-       const price = payload?.price || currentPrice || 0;
-       
-       const newOrder: Order = {
-          id: Date.now(),
-          type: type,
-          symbol: displaySymbol,
-          entryPrice: price,
-          margin: 100,
-          leverage: 20,
-          size: 2000,
-          liquidationPrice: price * (type === 'buy' ? 0.95 : 1.05),
-          status: 'active'
-       };
-       
-       onTrade(newOrder);
+       const executionPrice = currentPrice || 0; 
+
+       if (executionPrice <= 0) {
+         console.warn("Waiting for market data...");
+         setMenuState(prev => ({ ...prev, visible: false }));
+         return;
+       }
+
+       // OPEN THE CUSTOM MODAL
+       setConfirmAction({ type, price: executionPrice });
     }
     
     setMenuState(prev => ({ ...prev, visible: false }));
+  };
+
+  const executeTrade = () => {
+    if (!confirmAction) return;
+
+    const { type, price } = confirmAction;
+
+    const newOrder: Order = {
+      id: Date.now(),
+      type: type,
+      symbol: displaySymbol,
+      entryPrice: price,
+      margin: 100,
+      leverage: 20,
+      size: 2000,
+      liquidationPrice: price * (type === 'buy' ? 0.95 : 1.05),
+      status: 'active'
+    };
+    
+    onTrade(newOrder);
+    setConfirmAction(null); // Close modal
   };
 
   // --- CHART INIT ---
@@ -176,10 +196,8 @@ export default function Chart({
         seriesRef.current.update({ time: lastCandleTime, value: currentAnimatedPriceRef.current });
         
         const y = seriesRef.current.priceToCoordinate(currentAnimatedPriceRef.current);
-        // ✅ FIX 1: Safe coordinate access
         const x = chartRef.current.timeScale().timeToCoordinate(lastCandleTime);
         
-        // ✅ FIX 2: Check for undefined/null x
         if (dotRef.current && y !== null && x !== null && x !== undefined) {
             dotRef.current.style.display = 'block';
             dotRef.current.style.transform = `translate(${x - 6}px, ${y - 6}px)`;
@@ -220,6 +238,52 @@ export default function Chart({
             <Loader2 className="w-10 h-10 text-[#21ce99] animate-spin mb-3" />
         </div>
       )}
+      
+      {/* GLASSMORPHIC CONFIRMATION MODAL */}
+      {confirmAction && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] animate-in fade-in duration-200">
+           <div className="w-[320px] bg-[#151a21]/90 backdrop-blur-xl border border-[#2a2e39] p-5 rounded-2xl shadow-2xl flex flex-col items-center gap-4 transform transition-all scale-100">
+              
+              {/* Header Icon */}
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.3)] ${
+                 confirmAction.type === 'buy' ? 'bg-[#21ce99]/20 text-[#21ce99]' : 'bg-[#f23645]/20 text-[#f23645]'
+              }`}>
+                 <AlertTriangle size={24} />
+              </div>
+
+              {/* Text Info */}
+              <div className="text-center space-y-1">
+                 <h3 className="text-white font-bold text-lg">Confirm Transaction</h3>
+                 <p className="text-[#9ca3af] text-xs">
+                    Are you sure you want to 
+                    <span className={`font-black uppercase mx-1 ${confirmAction.type === 'buy' ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
+                      {confirmAction.type}
+                    </span>
+                    at <span className="text-white font-mono">${confirmAction.price.toFixed(2)}</span>?
+                 </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex w-full gap-3 mt-2">
+                 <button 
+                   onClick={() => setConfirmAction(null)}
+                   className="flex-1 py-2.5 rounded-lg bg-[#2a2e39] text-[#9ca3af] font-bold text-xs hover:bg-[#363c4a] hover:text-white transition-all flex items-center justify-center gap-2"
+                 >
+                    <X size={14} /> CANCEL
+                 </button>
+                 
+                 <button 
+                   onClick={executeTrade}
+                   className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-[#0b0e11] transition-all shadow-lg hover:brightness-110 flex items-center justify-center gap-2 ${
+                     confirmAction.type === 'buy' ? 'bg-[#21ce99] shadow-[#21ce99]/20' : 'bg-[#f23645] text-white shadow-[#f23645]/20'
+                   }`}
+                 >
+                    <Check size={14} /> CONFIRM
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* RANGES */}
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex gap-2 bg-[#0b0e11]/80 backdrop-blur-sm p-1.5 rounded-full border border-[#2a2e39] opacity-50 hover:opacity-100 transition-opacity">
@@ -230,20 +294,15 @@ export default function Chart({
         ))}
       </div>
 
-      {/* ✅ FIX 3: PASS ALL PROPS TO OVERLAY */}
       <ChartOverlay 
         chart={chartApi} 
         series={seriesApi} 
-        
-        // Drawing Props
         activeTool={activeTool}
         onToolComplete={onToolComplete}
         clearTrigger={clearTrigger}
         removeSelectedTrigger={removeSelectedTrigger}
         isLocked={isLocked}
         isHidden={isHidden}
-        
-        // Trading Props
         activeOrders={activeOrders}
         currentPrice={currentPrice}
         onCloseOrder={onCloseOrder}
