@@ -1,8 +1,13 @@
 import { User, ChevronDown } from 'lucide-react';
 import { useClickSound } from '../hooks/useClickSound';
 
+// ✅ FIX: Define the props properly
 interface HeaderProps {
-  activeAsset: { symbol: string; name: string; displaySymbol: string }; // Updated Props
+  activeAsset: { 
+    symbol: string; 
+    name: string; 
+    displaySymbol: string; // We need this for "BTC/USD" vs "BTCUSDT"
+  }; 
   onOpenAssetSelector: () => void;
 }
 
@@ -12,7 +17,7 @@ export default function Header({ activeAsset, onOpenAssetSelector }: HeaderProps
   return (
     <header className="h-14 border-b border-[#2a2e39] flex items-center justify-between px-6 bg-[#151a21]/80 backdrop-blur-md z-30 relative">
       
-      {/* 1. LOGO AREA & ASSET BUTTON */}
+      {/* 1. LOGO AREA */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#21ce99] to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(33,206,153,0.3)]">
@@ -21,7 +26,7 @@ export default function Header({ activeAsset, onOpenAssetSelector }: HeaderProps
           <div className="font-bold text-lg tracking-widest text-white hidden md:block">TRADING<span className="text-[#21ce99]">PRO</span></div>
         </div>
 
-        {/* 2. THE ASSET BUTTON */}
+        {/* 2. ASSET SELECTOR BUTTON */}
         <button 
           onClick={() => { playClick(); onOpenAssetSelector(); }}
           className="flex items-center gap-3 bg-[#0b0e11] hover:bg-[#2a303c] border border-[#2a2e39] hover:border-[#21ce99] rounded-lg px-4 py-1.5 transition-all group"
@@ -34,7 +39,7 @@ export default function Header({ activeAsset, onOpenAssetSelector }: HeaderProps
         </button>
       </div>
 
-      {/* 3. RIGHT PROFILE & BALANCE */}
+      {/* 3. RIGHT PROFILE */}
       <div className="flex items-center gap-4">
         <div 
           onClick={playClick} 

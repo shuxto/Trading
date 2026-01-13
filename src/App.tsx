@@ -4,9 +4,9 @@ import OrderPanel from './components/OrderPanel'
 import Sidebar from './components/Sidebar'
 import Chart from './components/Chart'
 import WorldMap from './components/WorldMap'
-import AssetSelector from './components/AssetSelector' 
+import AssetSelector from './components/AssetSelector'
+import PremiumModal from './components/PremiumModal' // ✅ ADDED IMPORT
 
-// Define the shape of our Asset State
 interface ActiveAssetState {
   symbol: string;
   displaySymbol: string;
@@ -18,18 +18,15 @@ export default function App() {
   const [orders, setOrders] = useState<any[]>([])
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
   
-  // TOOL SIGNALS
   const [clearTrigger, setClearTrigger] = useState<number>(0);
   const [removeSelectedTrigger, setRemoveSelectedTrigger] = useState<number>(0);
   
-  // DRAWING STATE
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isHidden, setIsHidden] = useState<boolean>(false);
 
-  // ASSET STATE (Fixed Types)
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false); // ✅ ADDED STATE
   
-  // FIX: Explicitly tell TypeScript what this state can hold
   const [activeAsset, setActiveAsset] = useState<ActiveAssetState>({ 
     symbol: 'BTCUSDT', 
     displaySymbol: 'BTC/USD', 
@@ -61,8 +58,13 @@ export default function App() {
       <AssetSelector 
         isOpen={isAssetSelectorOpen} 
         onClose={() => setIsAssetSelectorOpen(false)}
-        // Now this matches perfectly because activeAsset allows both sources
         onSelect={setActiveAsset} 
+      />
+
+      {/* ✅ ADDED MODAL */}
+      <PremiumModal 
+        isOpen={isPremiumModalOpen} 
+        onClose={() => setIsPremiumModalOpen(false)} 
       />
       
       <div className="flex-1 flex min-h-0 relative z-10">
@@ -87,11 +89,12 @@ export default function App() {
              removeSelectedTrigger={removeSelectedTrigger}
              isLocked={isLocked}
              isHidden={isHidden}
-             
-             // PASS ASSET DATA TO CHART
              symbol={activeAsset.symbol}
              displaySymbol={activeAsset.displaySymbol} 
-             source={activeAsset.source} 
+             source={activeAsset.source}
+             
+             // ✅ PASS TRIGGER FUNCTION
+             onTriggerPremium={() => setIsPremiumModalOpen(true)}
           />
         </main>
 
