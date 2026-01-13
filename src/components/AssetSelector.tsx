@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Search, TrendingUp, TrendingDown, X, Bitcoin, DollarSign, BarChart3, Droplets, Globe } from 'lucide-react';
-import { ASSETS } from '../constants/assets'; // ✅ Import Data
-import type { Asset } from '../types';         // ✅ Import Type
+import { ASSETS } from '../constants/assets'; 
+import type { Asset } from '../types';
 
 interface AssetSelectorProps {
   isOpen: boolean;
@@ -17,6 +17,58 @@ const CATEGORIES = [
   { id: 'commodity', label: 'Commodities', icon: <Droplets size={14} /> },
 ];
 
+// Helper Component to handle Image State cleanly
+const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => void }) => {
+  const [imgError, setImgError] = useState(false);
+
+  const getFallbackIcon = (type: string) => {
+    if (type === 'crypto') return <Bitcoin size={18} className="text-orange-500" />;
+    if (type === 'stock') return <BarChart3 size={18} className="text-blue-500" />;
+    if (type === 'forex') return <DollarSign size={18} className="text-green-500" />;
+    return <Globe size={18} className="text-yellow-500" />;
+  };
+
+  return (
+    <div 
+      onClick={() => onSelect(asset)}
+      className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-all border border-transparent hover:border-white/5 active:scale-[0.99]"
+    >
+      <div className="flex items-center gap-4">
+        {/* Icon Container */}
+        <div className="w-10 h-10 rounded-full bg-white/5 p-2 flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all overflow-hidden relative">
+          {!imgError ? (
+            <img 
+              src={asset.logo} 
+              alt={asset.name} 
+              className="w-full h-full object-contain rounded-full"
+              onError={() => setImgError(true)} 
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+                {getFallbackIcon(asset.type)}
+            </div>
+          )}
+        </div>
+        
+        <div className="flex flex-col">
+          <span className="text-sm font-bold text-white group-hover:text-[#21ce99] transition-colors">{asset.displaySymbol}</span>
+          <span className="text-[11px] text-[#5e6673] font-medium">{asset.name}</span>
+        </div>
+      </div>
+
+      <div className="text-right">
+        <div className="text-sm font-mono font-bold text-white">${asset.price.toLocaleString()}</div>
+        <div className={`text-[11px] font-bold flex items-center justify-end gap-1
+          ${asset.change >= 0 ? 'text-[#21ce99]' : 'text-[#f23645]'}`}
+        >
+          {asset.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+          {Math.abs(asset.change)}%
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelectorProps) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
@@ -30,13 +82,6 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
                           asset.displaySymbol.toLowerCase().includes(search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
-
-  const getFallbackIcon = (type: string) => {
-    if (type === 'crypto') return <Bitcoin size={18} className="text-orange-500" />;
-    if (type === 'stock') return <BarChart3 size={18} className="text-blue-500" />;
-    if (type === 'forex') return <DollarSign size={18} className="text-green-500" />;
-    return <Globe size={18} className="text-yellow-500" />;
-  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0b0e11]/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
@@ -85,43 +130,11 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
         {/* ASSET LIST */}
         <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
           {filteredAssets.map(asset => (
-            <div 
-              key={asset.symbol}
-              onClick={() => { onSelect(asset); onClose(); }}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-all border border-transparent hover:border-white/5 active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/5 p-2 flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all overflow-hidden relative">
-                  <img 
-                    src={asset.logo} 
-                    alt={asset.name} 
-                    className="w-full h-full object-contain rounded-full"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
-                    }} 
-                  />
-                  <div className="fallback-icon hidden absolute inset-0 flex items-center justify-center">
-                     {getFallbackIcon(asset.type)}
-                  </div>
-                </div>
-                
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white group-hover:text-[#21ce99] transition-colors">{asset.displaySymbol}</span>
-                  <span className="text-[11px] text-[#5e6673] font-medium">{asset.name}</span>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-sm font-mono font-bold text-white">${asset.price.toLocaleString()}</div>
-                <div className={`text-[11px] font-bold flex items-center justify-end gap-1
-                  ${asset.change >= 0 ? 'text-[#21ce99]' : 'text-[#f23645]'}`}
-                >
-                  {asset.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                  {Math.abs(asset.change)}%
-                </div>
-              </div>
-            </div>
+             <AssetRow 
+               key={asset.symbol} 
+               asset={asset} 
+               onSelect={(a) => { onSelect(a); onClose(); }} 
+             />
           ))}
           
           {filteredAssets.length === 0 && (
