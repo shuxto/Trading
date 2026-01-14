@@ -14,11 +14,10 @@ import {
   type Time,
   type LineWidth 
 } from 'lightweight-charts';
-import { useClock } from '../hooks/useClock';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
-import { Lock, Loader2, Clock, AlertTriangle, X, Check } from 'lucide-react';
+import { Lock, Loader2, AlertTriangle, X, Check } from 'lucide-react';
 import type { Order, ChartStyle, CandleData } from '../types';
 
 interface ChartProps {
@@ -54,7 +53,6 @@ export default function Chart({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   const [activeRange, setActiveRange] = useState<string | null>(null);
-  const currentTime = useClock();
 
   const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
     visible: false, x: 0, y: 0, price: 0
@@ -240,13 +238,10 @@ export default function Chart({
 
   }, [chartStyle]); 
 
-  // ✅ NEW EFFECT: Handle Crosshair Toggle
+  // Handle Crosshair Toggle
   useEffect(() => {
     if (chartRef.current) {
-      // If we have an active tool (drawing or crosshair), show crosshair
-      // If activeTool is NULL (toggled off), hide it
       const mode = activeTool ? CrosshairMode.Normal : CrosshairMode.Hidden;
-      
       chartRef.current.applyOptions({
         crosshair: {
           mode: mode,
@@ -340,7 +335,8 @@ export default function Chart({
         <h1 className="text-4xl font-black text-[#5e6673] select-none tracking-tighter opacity-20">{displaySymbol}</h1>
       </div>
 
-      <div ref={chartContainerRef} className={`absolute top-0 left-0 right-0 bottom-8 ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} />
+      {/* Chart container extended to bottom-0 */}
+      <div ref={chartContainerRef} className={`absolute top-0 left-0 right-0 bottom-0 ${activeTool === 'crosshair' ? 'cursor-crosshair' : 'cursor-default'}`} />
 
       {isLoading && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#191f2e]/50 backdrop-blur-sm animate-in fade-in">
@@ -413,20 +409,7 @@ export default function Chart({
       {/* Pulsing Dot (Area Only) */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}></div>
       
-      <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-             <div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div>
-             <span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE</span>
-          </div>
-          <div className="h-3 w-[1px] bg-[#2a2e39]"></div>
-          <span className="text-[10px] text-white font-mono font-bold">{currentPrice ? currentPrice.toFixed(2) : '---'}</span>
-        </div>
-        <div className="flex items-center gap-2 text-[#5e6673]">
-           <Clock size={12} />
-           <span className="text-[10px] font-mono font-bold tabular-nums">{currentTime}</span>
-        </div>
-      </div>
+      {/* FOOTER REMOVED (Moved to PositionsPanel) */}
 
       {menuState.visible && (
         <ChartContextMenu 
