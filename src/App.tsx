@@ -7,11 +7,14 @@ import WorldMap from './components/WorldMap'
 import AssetSelector from './components/AssetSelector'
 import PremiumModal from './components/PremiumModal'
 import { useMarketData } from './hooks/useMarketData' 
-import { type Order, type ActiveAsset } from './types'
+import { type Order, type ActiveAsset, type ChartStyle } from './types'
 
 export default function App() {
   const [orders, setOrders] = useState<Order[]>([])
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
+  
+  // ✅ NEW: Chart Style State (Default: candles)
+  const [chartStyle, setChartStyle] = useState<ChartStyle>('candles');
   
   // Triggers
   const [clearTrigger, setClearTrigger] = useState<number>(0);
@@ -48,7 +51,6 @@ export default function App() {
     console.log("Order Executed:", newOrder);
   }
 
-  // ✅ NEW: Handle closing orders from the Chart Overlay
   const handleCloseOrder = (orderId: number) => {
     setOrders(prevOrders => prevOrders.filter(o => o.id !== orderId));
   }
@@ -79,6 +81,10 @@ export default function App() {
         <Sidebar 
            activeTool={activeTool} 
            onToolSelect={setActiveTool} 
+           // ✅ Pass Style Props
+           chartStyle={chartStyle}
+           onChartStyleChange={setChartStyle}
+           
            onClear={() => setClearTrigger(Date.now())}
            onRemoveSelected={() => setRemoveSelectedTrigger(Date.now())}
            isLocked={isLocked}
@@ -95,11 +101,14 @@ export default function App() {
              lastCandleTime={lastCandleTime}
              isLoading={isLoading}
              
+             // ✅ Pass Chart Style
+             chartStyle={chartStyle}
+
              // Timeframe Props
              activeTimeframe={timeframe}
              onTimeframeChange={setTimeframe}
 
-             // ✅ TRADING PROPS (Fixed the error)
+             // Trading Props
              activeOrders={orders} 
              onTrade={handleTrade}
              onCloseOrder={handleCloseOrder}

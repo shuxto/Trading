@@ -1,3 +1,23 @@
+import { type Time } from 'lightweight-charts';
+
+// ✅ Updated ChartStyle: Removed 'hlc-area', 'columns', 'histogram'
+export type ChartStyle = 
+  | 'candles' 
+  | 'bars' 
+  | 'line' 
+  | 'area' 
+  | 'stepline' 
+  | 'baseline';
+
+export interface CandleData {
+  time: Time;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+}
+
 export interface Order {
   id: number;
   type: 'buy' | 'sell';
@@ -9,8 +29,8 @@ export interface Order {
   liquidationPrice: number;
   status: 'active' | 'closed';
   pnl?: number; 
-  takeProfit?: number; // ✅ Optional
-  stopLoss?: number;   // ✅ Optional
+  takeProfit?: number; 
+  stopLoss?: number;   
 }
 
 export interface Asset {

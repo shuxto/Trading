@@ -1,29 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, AreaSeries, type ISeriesApi, type IChartApi, CrosshairMode, type Time } from 'lightweight-charts';
+import { 
+  createChart, 
+  ColorType, 
+  AreaSeries, 
+  CandlestickSeries, 
+  BarSeries,
+  LineSeries,
+  HistogramSeries,
+  BaselineSeries,
+  type ISeriesApi, 
+  type IChartApi, 
+  CrosshairMode, 
+  type Time,
+  type LineWidth 
+} from 'lightweight-charts';
 import { useClock } from '../hooks/useClock';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
 import { Lock, Loader2, Clock, AlertTriangle, X, Check } from 'lucide-react';
-import type { Order } from '../types';
+import type { Order, ChartStyle, CandleData } from '../types';
 
 interface ChartProps {
-  // Data
-  candles: { time: Time; value: number }[];
+  candles: CandleData[]; 
   currentPrice: number | null;
   lastCandleTime: Time | null;
   isLoading: boolean;
-  
-  // Controls
   activeTimeframe: string;
   onTimeframeChange: (tf: string) => void;
-
-  // Trading Interactions
+  chartStyle: ChartStyle;
   activeOrders: Order[];
   onTrade: (order: Order) => void;
   onCloseOrder: (id: number) => void;
-
-  // Tools & UI
   activeTool: string | null;     
   onToolComplete: () => void; 
   clearTrigger: number; 
@@ -37,7 +45,7 @@ interface ChartProps {
 
 export default function Chart({ 
   candles, currentPrice, lastCandleTime, isLoading, 
-  activeTimeframe, onTimeframeChange,
+  activeTimeframe, onTimeframeChange, chartStyle,
   activeOrders, onTrade, onCloseOrder,
   activeTool, onToolComplete, clearTrigger, removeSelectedTrigger, 
   isLocked, isHidden, displaySymbol, onTriggerPremium 
@@ -48,20 +56,18 @@ export default function Chart({
   const [activeRange, setActiveRange] = useState<string | null>(null);
   const currentTime = useClock();
 
-  // Context Menu State
   const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
     visible: false, x: 0, y: 0, price: 0
   });
 
-  // Confirmation Modal State
   const [confirmAction, setConfirmAction] = useState<{ type: 'buy' | 'sell'; price: number } | null>(null);
 
   const [chartApi, setChartApi] = useState<IChartApi | null>(null);
-  const [seriesApi, setSeriesApi] = useState<ISeriesApi<"Area"> | null>(null);
+  const seriesRef = useRef<ISeriesApi<any> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null); 
   
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const currentAnimatedPriceRef = useRef<number | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
 
   // --- HANDLERS ---
   const handleTimeframeClick = (tf: typeof TIMEFRAMES[0]) => {
@@ -76,34 +82,22 @@ export default function Chart({
     if (chartRef.current) chartRef.current.timeScale().fitContent();
   };
 
-  // ✅ FIX: Renamed 'payload' to '_payload' to silence the linter error
   const handleMenuAction = (action: string, _payload?: any) => {
     if (action === 'reset' && chartRef.current) {
        chartRef.current.timeScale().fitContent();
     }
-    
     if (action === 'buy_limit' || action === 'sell_limit') {
        const type = action === 'buy_limit' ? 'buy' : 'sell';
        const executionPrice = currentPrice || 0; 
-
-       if (executionPrice <= 0) {
-         console.warn("Waiting for market data...");
-         setMenuState(prev => ({ ...prev, visible: false }));
-         return;
-       }
-
-       // OPEN THE CUSTOM MODAL
+       if (executionPrice <= 0) return;
        setConfirmAction({ type, price: executionPrice });
     }
-    
     setMenuState(prev => ({ ...prev, visible: false }));
   };
 
   const executeTrade = () => {
     if (!confirmAction) return;
-
     const { type, price } = confirmAction;
-
     const newOrder: Order = {
       id: Date.now(),
       type: type,
@@ -115,72 +109,175 @@ export default function Chart({
       liquidationPrice: price * (type === 'buy' ? 0.95 : 1.05),
       status: 'active'
     };
-    
     onTrade(newOrder);
-    setConfirmAction(null); // Close modal
+    setConfirmAction(null);
   };
 
   // --- CHART INIT ---
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#9ca3af', attributionLogo: false },
-      grid: { vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight,
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 12, barSpacing: 6 },
-      rightPriceScale: { borderColor: 'transparent' },
-      crosshair: { mode: CrosshairMode.Normal },
-    });
+    if (!chartRef.current) {
+      const chart = createChart(chartContainerRef.current, {
+        layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#9ca3af', attributionLogo: false },
+        grid: { vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } },
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight,
+        timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 12, barSpacing: 6 },
+        rightPriceScale: { borderColor: 'transparent' },
+        crosshair: { mode: CrosshairMode.Normal },
+      });
 
-    const areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: '#ffffff', topColor: 'rgba(255, 255, 255, 0.1)', bottomColor: 'rgba(255, 255, 255, 0.1)', lineWidth: 2,
-    });
+      chartRef.current = chart;
+      setChartApi(chart);
 
-    chartRef.current = chart;
-    seriesRef.current = areaSeries;
-    setChartApi(chart);
-    setSeriesApi(areaSeries);
+      const handleResize = () => { if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight }); };
+      window.addEventListener('resize', handleResize);
 
-    const handleRightClick = (event: MouseEvent) => {
-        event.preventDefault(); 
-        if (!chartRef.current || !seriesRef.current) return;
-        
-        const price = seriesRef.current.coordinateToPrice(event.offsetY);
-        
-        if (price) {
-             setMenuState({ 
-                visible: true, 
-                x: event.clientX, 
-                y: event.clientY, 
-                price: price 
-             });
-        }
-    };
+      const handleRightClick = (event: MouseEvent) => {
+          event.preventDefault(); 
+          if (!chartRef.current || !seriesRef.current) return;
+          const price = seriesRef.current.coordinateToPrice(event.offsetY);
+          if (price) {
+               setMenuState({ visible: true, x: event.clientX, y: event.clientY, price: price });
+          }
+      };
+      chartContainerRef.current.addEventListener('contextmenu', handleRightClick);
+      chart.subscribeClick(() => setMenuState(prev => ({ ...prev, visible: false })));
+    }
 
-    chartContainerRef.current.addEventListener('contextmenu', handleRightClick);
-
-    const handleResize = () => { if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight }); };
-    window.addEventListener('resize', handleResize);
+    // --- RECREATE MAIN SERIES BASED ON STYLE ---
+    const chart = chartRef.current;
     
-    chart.subscribeClick(() => setMenuState(prev => ({ ...prev, visible: false })));
+    // Clean up old series
+    if (seriesRef.current) {
+      chart.removeSeries(seriesRef.current);
+      seriesRef.current = null;
+    }
+    if (volumeSeriesRef.current) {
+      chart.removeSeries(volumeSeriesRef.current);
+      volumeSeriesRef.current = null;
+    }
 
-    return () => {
-      if (chartContainerRef.current) chartContainerRef.current.removeEventListener('contextmenu', handleRightClick);
-      window.removeEventListener('resize', handleResize);
-      chart.remove();
-    };
-  }, []); 
+    // 1. Create Main Series
+    let newSeries: ISeriesApi<any>;
+
+    // Common options
+    const lineOptions = { color: '#21ce99', lineWidth: 2 as LineWidth };
+    
+    switch (chartStyle) {
+      case 'candles':
+        newSeries = chart.addSeries(CandlestickSeries, {
+          upColor: '#21ce99', downColor: '#f23645', borderVisible: false, wickUpColor: '#21ce99', wickDownColor: '#f23645',
+        });
+        break;
+      
+      case 'bars':
+        newSeries = chart.addSeries(BarSeries, {
+          upColor: '#21ce99', downColor: '#f23645', thinBars: false,
+        });
+        break;
+
+      case 'line':
+        newSeries = chart.addSeries(LineSeries, lineOptions);
+        break;
+
+      case 'area':
+        newSeries = chart.addSeries(AreaSeries, {
+          lineColor: '#ffffff', topColor: 'rgba(255, 255, 255, 0.1)', bottomColor: 'rgba(255, 255, 255, 0.0)', lineWidth: 2 as LineWidth,
+        });
+        break;
+
+      case 'stepline':
+        newSeries = chart.addSeries(LineSeries, { ...lineOptions, lineType: 1 } as any); 
+        break;
+
+      case 'baseline': 
+        newSeries = chart.addSeries(BaselineSeries, {
+          baseValue: { type: 'price', price: currentPrice || 0 },
+          topLineColor: '#21ce99', bottomLineColor: '#f23645',
+        });
+        break;
+
+      default:
+        newSeries = chart.addSeries(CandlestickSeries, {
+          upColor: '#21ce99', downColor: '#f23645', borderVisible: false, wickUpColor: '#21ce99', wickDownColor: '#f23645',
+        });
+    }
+
+    seriesRef.current = newSeries;
+
+    // 2. Create Volume Series 
+    if (chartStyle === 'candles' || chartStyle === 'bars') {
+       const volSeries = chart.addSeries(HistogramSeries, {
+          color: '#26a69a',
+          priceFormat: { type: 'volume' },
+          priceScaleId: '', 
+       });
+       
+       volSeries.priceScale().applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+       });
+       volumeSeriesRef.current = volSeries;
+    }
+
+    // 3. Populate Data
+    if (candles.length > 0) {
+      if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
+         newSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+      } else {
+         newSeries.setData(candles);
+      }
+
+      if (volumeSeriesRef.current) {
+         volumeSeriesRef.current.setData(candles.map(c => ({
+            time: c.time,
+            value: c.volume || 0,
+            color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
+         })));
+      }
+    }
+
+  }, [chartStyle]); 
+
+  // ✅ NEW EFFECT: Handle Crosshair Toggle
+  useEffect(() => {
+    if (chartRef.current) {
+      // If we have an active tool (drawing or crosshair), show crosshair
+      // If activeTool is NULL (toggled off), hide it
+      const mode = activeTool ? CrosshairMode.Normal : CrosshairMode.Hidden;
+      
+      chartRef.current.applyOptions({
+        crosshair: {
+          mode: mode,
+          vertLine: { visible: activeTool !== null },
+          horzLine: { visible: activeTool !== null },
+        }
+      });
+    }
+  }, [activeTool]);
 
   // --- DATA UPDATE ---
   useEffect(() => {
     if (seriesRef.current && candles.length > 0) {
-      seriesRef.current.setData(candles);
-      const lastPrice = candles[candles.length - 1].value;
+      if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
+         (seriesRef.current as ISeriesApi<"Line">).setData(candles.map(c => ({ time: c.time, value: c.close })));
+      } else {
+         (seriesRef.current as ISeriesApi<"Candlestick">).setData(candles);
+      }
+
+      if (volumeSeriesRef.current) {
+          volumeSeriesRef.current.setData(candles.map(c => ({
+            time: c.time,
+            value: c.volume || 0,
+            color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
+         })));
+      }
+
+      const lastPrice = candles[candles.length - 1].close;
       currentAnimatedPriceRef.current = lastPrice;
     }
-  }, [candles]);
+  }, [candles, chartStyle]);
 
   // --- ANIMATION ---
   useEffect(() => {
@@ -193,21 +290,33 @@ export default function Chart({
         if (Math.abs(diff) > 0.005) currentAnimatedPriceRef.current += diff * 0.1;
         else currentAnimatedPriceRef.current = currentPrice;
 
-        seriesRef.current.update({ time: lastCandleTime, value: currentAnimatedPriceRef.current });
+        const timestamp = lastCandleTime;
+
+        if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
+            (seriesRef.current as ISeriesApi<"Line">).update({ time: timestamp, value: currentAnimatedPriceRef.current });
+        } 
         
-        const y = seriesRef.current.priceToCoordinate(currentAnimatedPriceRef.current);
-        const x = chartRef.current.timeScale().timeToCoordinate(lastCandleTime);
-        
-        if (dotRef.current && y !== null && x !== null && x !== undefined) {
-            dotRef.current.style.display = 'block';
-            dotRef.current.style.transform = `translate(${x - 6}px, ${y - 6}px)`;
+        if (dotRef.current) {
+            if (chartStyle === 'area' && seriesRef.current) {
+                const y = seriesRef.current.priceToCoordinate(currentAnimatedPriceRef.current);
+                const x = chartRef.current.timeScale().timeToCoordinate(timestamp);
+                
+                if (y !== null && x !== null && x !== undefined) {
+                    dotRef.current.style.display = 'block';
+                    dotRef.current.style.transform = `translate(${x - 6}px, ${y - 6}px)`;
+                } else {
+                    dotRef.current.style.display = 'none';
+                }
+            } else {
+                dotRef.current.style.display = 'none';
+            }
         }
       }
       frameId = requestAnimationFrame(animate);
     };
     animate();
     return () => cancelAnimationFrame(frameId);
-  }, [currentPrice, lastCandleTime]);
+  }, [currentPrice, lastCandleTime, chartStyle]);
 
   return (
     <div className="w-full h-full relative group bg-transparent overflow-hidden">
@@ -239,19 +348,15 @@ export default function Chart({
         </div>
       )}
       
-      {/* GLASSMORPHIC CONFIRMATION MODAL */}
+      {/* CONFIRMATION MODAL */}
       {confirmAction && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px] animate-in fade-in duration-200">
            <div className="w-[320px] bg-[#151a21]/90 backdrop-blur-xl border border-[#2a2e39] p-5 rounded-2xl shadow-2xl flex flex-col items-center gap-4 transform transition-all scale-100">
-              
-              {/* Header Icon */}
               <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(0,0,0,0.3)] ${
                  confirmAction.type === 'buy' ? 'bg-[#21ce99]/20 text-[#21ce99]' : 'bg-[#f23645]/20 text-[#f23645]'
               }`}>
                  <AlertTriangle size={24} />
               </div>
-
-              {/* Text Info */}
               <div className="text-center space-y-1">
                  <h3 className="text-white font-bold text-lg">Confirm Transaction</h3>
                  <p className="text-[#9ca3af] text-xs">
@@ -262,8 +367,6 @@ export default function Chart({
                     at <span className="text-white font-mono">${confirmAction.price.toFixed(2)}</span>?
                  </p>
               </div>
-
-              {/* Action Buttons */}
               <div className="flex w-full gap-3 mt-2">
                  <button 
                    onClick={() => setConfirmAction(null)}
@@ -271,7 +374,6 @@ export default function Chart({
                  >
                     <X size={14} /> CANCEL
                  </button>
-                 
                  <button 
                    onClick={executeTrade}
                    className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-[#0b0e11] transition-all shadow-lg hover:brightness-110 flex items-center justify-center gap-2 ${
@@ -296,7 +398,7 @@ export default function Chart({
 
       <ChartOverlay 
         chart={chartApi} 
-        series={seriesApi} 
+        series={seriesRef.current as any} 
         activeTool={activeTool}
         onToolComplete={onToolComplete}
         clearTrigger={clearTrigger}
@@ -308,6 +410,7 @@ export default function Chart({
         onCloseOrder={onCloseOrder}
       />
       
+      {/* Pulsing Dot (Area Only) */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}></div>
       
       <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
