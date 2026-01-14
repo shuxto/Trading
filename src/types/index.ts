@@ -37,7 +37,8 @@ export interface Asset {
   symbol: string;
   displaySymbol: string;
   name: string;
-  type: 'crypto' | 'stock' | 'forex' | 'commodity';
+  // ✅ ADDED 'index' here to fix the error
+  type: 'crypto' | 'stock' | 'forex' | 'commodity' | 'index';
   price: number;
   change: number;
   source: 'binance' | 'twelve';

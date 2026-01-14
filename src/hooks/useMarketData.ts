@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { type Time } from 'lightweight-charts';
 import type { CandleData } from '../types';
 
-// --- CONFIGURATION ---
-const TWELVE_DATA_API_KEY = "45f5dda259ed4218a790cda4807bf5a1"; 
+// ✅ Your Paid Twelve Data Key
+const TWELVE_DATA_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
 
 export function useMarketData(symbol: string, interval: string, source: 'binance' | 'twelve') {
   const [candles, setCandles] = useState<CandleData[]>([]);
@@ -22,7 +22,9 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
     setCurrentPrice(null);
     setIsLoading(true);
 
-    // --- ENGINE A: BINANCE (Crypto) ---
+    // ==========================================
+    // ENGINE A: BINANCE (Crypto) - Free WS
+    // ==========================================
     if (source === 'binance') {
       const fetchBinanceHistory = async () => {
         try {
@@ -35,7 +37,7 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
               high: parseFloat(d[2]),
               low: parseFloat(d[3]),
               close: parseFloat(d[4]),
-              volume: parseFloat(d[5]) // ✅ Capture Volume
+              volume: parseFloat(d[5])
             }));
 
             setCandles(formatted);
@@ -56,13 +58,11 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
       
       ws.onmessage = (event) => {
         if (symbolRef.current !== symbol) return;
-        
         const message = JSON.parse(event.data);
         const candle = message.k;
-
         const price = parseFloat(candle.c);
         const time = (candle.t / 1000) as Time;
-        const volume = parseFloat(candle.v); // ✅ Capture Volume
+        const volume = parseFloat(candle.v);
 
         setCurrentPrice(price);
         setLastCandleTime(time);
@@ -72,34 +72,28 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
           const last = prev[prev.length - 1];
           if (last.time === time) {
             return [...prev.slice(0, -1), { 
-               ...last, 
-               close: price,
-               high: Math.max(last.high, price),
-               low: Math.min(last.low, price),
-               volume: last.volume ? last.volume + volume : volume // Accumulate volume if same candle
+               ...last, close: price, high: Math.max(last.high, price), low: Math.min(last.low, price), volume: last.volume ? last.volume + volume : volume
             }];
           } else {
-             // We don't append new candle here to avoid flicker, usually chart handles it via ticks
-             // But for completeness in state:
-             return prev;
+             return prev; 
           }
         });
-
         setIsLoading(false);
       };
-
       return () => ws.close();
     }
 
-    // --- ENGINE B: TWELVE DATA (Stocks, Forex, Gold) ---
+    // ==========================================
+    // ENGINE B: TWELVE DATA (Stocks/Forex) - PAID WS
+    // ==========================================
     if (source === 'twelve') {
-      let attempts = 0;
-
-      const fetchTwelveData = async () => {
+      
+      // 1. Fetch History (REST API) to load the chart
+      const fetchTwelveDataHistory = async () => {
         try {
+          // Adjust interval naming for Twelve Data (e.g. '1d' -> '1day')
           const tdInterval = interval === '1d' ? '1day' : interval; 
-          
-          const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`);
+          const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=500`);
           const data = await res.json();
 
           if (data.values && Array.isArray(data.values) && symbolRef.current === symbol) {
@@ -109,7 +103,7 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
               high: parseFloat(d.high),
               low: parseFloat(d.low),
               close: parseFloat(d.close),
-              volume: parseFloat(d.volume || '0') // ✅ Capture Volume (handle missing)
+              volume: parseFloat(d.volume || '0')
             }));
             
             setCandles(formatted);
@@ -118,14 +112,8 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
             setLastCandleTime(last.time);
             setIsLoading(false);
           } else {
-             console.warn("Twelve Data Retry:", data);
-             attempts++;
-             if (attempts < 3) {
-               setTimeout(fetchTwelveData, 1500);
-             } else {
-               setIsLoading(false);
-               if (!currentPrice) setCurrentPrice(150.00); 
-             }
+             console.warn("Twelve Data History Error:", data);
+             setIsLoading(false);
           }
         } catch (e) { 
           console.error("Twelve Data Error", e);
@@ -133,10 +121,52 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
         }
       };
 
-      fetchTwelveData();
-      
-      const intervalId = setInterval(fetchTwelveData, 60000); 
-      return () => clearInterval(intervalId);
+      fetchTwelveDataHistory();
+
+      // 2. Real-Time WebSocket (Paid Feature)
+      // Documentation: https://twelvedata.com/docs#websocket-api
+      const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${TWELVE_DATA_API_KEY}`);
+
+      ws.onopen = () => {
+        if (symbolRef.current === symbol) {
+            ws.send(JSON.stringify({
+                action: "subscribe",
+                params: { symbols: symbol }
+            }));
+        }
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        // Handle "price" event
+        if (data.event === 'price' && data.symbol === symbol && symbolRef.current === symbol) {
+            const price = parseFloat(data.price);
+            setCurrentPrice(price);
+            
+            // Update the last candle on the chart in real-time
+            setCandles(prev => {
+                if (prev.length === 0) return prev;
+                const last = prev[prev.length - 1];
+                
+                // Simple tick update: update Close, High, Low
+                return [...prev.slice(0, -1), {
+                   ...last,
+                   close: price,
+                   high: Math.max(last.high, price),
+                   low: Math.min(last.low, price)
+                }];
+            });
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("Twelve Data WS Error:", error);
+      };
+
+      return () => {
+        ws.close();
+      };
     }
 
   }, [symbol, interval, source]);
