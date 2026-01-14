@@ -1,7 +1,11 @@
-import { useState } from 'react';
-import { Search, TrendingUp, TrendingDown, X, Bitcoin, DollarSign, BarChart3, Droplets, Globe } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, TrendingUp, TrendingDown, X, Bitcoin, DollarSign, BarChart3, Droplets, Globe, Loader2 } from 'lucide-react';
 import { ASSETS } from '../constants/assets'; 
+import { supabase } from '../lib/supabase';
 import type { Asset } from '../types';
+
+// ✅ Your Paid Key
+const TWELVE_DATA_API_KEY = "05e7f5f30b384f11936a130f387c4092";
 
 interface AssetSelectorProps {
   isOpen: boolean;
@@ -15,9 +19,9 @@ const CATEGORIES = [
   { id: 'stock', label: 'Stocks', icon: <BarChart3 size={14} /> },
   { id: 'forex', label: 'Forex', icon: <DollarSign size={14} /> },
   { id: 'commodity', label: 'Commodities', icon: <Droplets size={14} /> },
+  { id: 'index', label: 'Indices', icon: <Globe size={14} /> },
 ];
 
-// Helper Component to handle Image State cleanly
 const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => void }) => {
   const [imgError, setImgError] = useState(false);
 
@@ -34,7 +38,6 @@ const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => v
       className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-all border border-transparent hover:border-white/5 active:scale-[0.99]"
     >
       <div className="flex items-center gap-4">
-        {/* Icon Container */}
         <div className="w-10 h-10 rounded-full bg-white/5 p-2 flex items-center justify-center group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-all overflow-hidden relative">
           {!imgError ? (
             <img 
@@ -57,13 +60,22 @@ const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => v
       </div>
 
       <div className="text-right">
-        <div className="text-sm font-mono font-bold text-white">${asset.price.toLocaleString()}</div>
-        <div className={`text-[11px] font-bold flex items-center justify-end gap-1
-          ${asset.change >= 0 ? 'text-[#21ce99]' : 'text-[#f23645]'}`}
-        >
-          {asset.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {Math.abs(asset.change)}%
-        </div>
+        {asset.price > 0 ? (
+            <>
+                <div className="text-sm font-mono font-bold text-white">${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</div>
+                {asset.change !== 0 && (
+                    <div className={`text-[11px] font-bold flex items-center justify-end gap-1 ${asset.change >= 0 ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
+                    {asset.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {Math.abs(asset.change).toFixed(2)}%
+                    </div>
+                )}
+            </>
+        ) : (
+            <div className="flex items-center gap-1 text-[#5e6673]">
+                <Loader2 size={12} className="animate-spin" />
+                <span className="text-[10px]">Loading...</span>
+            </div>
+        )}
       </div>
     </div>
   );
@@ -72,10 +84,91 @@ const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => v
 export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelectorProps) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [liveAssets, setLiveAssets] = useState<Asset[]>(ASSETS);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // --- 1. FETCH BINANCE PRICES (For Crypto) ---
+    const fetchBinancePrices = async () => {
+      try {
+        const cryptoAssets = ASSETS.filter(a => a.source === 'binance');
+        if (cryptoAssets.length === 0) return;
+
+        // Binance Batch Request (Symbol List)
+        // Format: ["BTCUSDT","ETHUSDT"]
+        const symbols = JSON.stringify(cryptoAssets.map(a => a.symbol));
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${symbols}`);
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          setLiveAssets(prev => prev.map(asset => {
+            const update = data.find((d: any) => d.symbol === asset.symbol);
+            if (update) {
+              return { 
+                ...asset, 
+                price: parseFloat(update.lastPrice),
+                change: parseFloat(update.priceChangePercent)
+              };
+            }
+            return asset;
+          }));
+        }
+      } catch (e) {
+        console.error("Binance Fetch Error:", e);
+      }
+    };
+
+    // --- 2. FETCH TWELVE DATA PRICES (For Stocks/Forex/Commodities) ---
+    const fetchTwelveDataPrices = async () => {
+      try {
+        const proAssets = ASSETS.filter(a => a.source === 'twelve');
+        if (proAssets.length === 0) return;
+
+        const symbols = proAssets.map(a => a.symbol).join(',');
+        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbols}&apikey=${TWELVE_DATA_API_KEY}`);
+        const data = await res.json();
+
+        // Data format: { "AAPL": { "price": "150.00" }, ... }
+        if (data && !data.code) {
+          setLiveAssets(prev => prev.map(asset => {
+            const update = data[asset.symbol];
+            if (update && update.price) {
+              return { ...asset, price: parseFloat(update.price) };
+            }
+            return asset;
+          }));
+        }
+      } catch (e) {
+        console.error("Twelve Data Fetch Error:", e);
+      }
+    };
+
+    // Trigger both fetches
+    fetchBinancePrices();
+    fetchTwelveDataPrices();
+
+    // --- 3. LISTEN TO SUPABASE (For Real-time ticks) ---
+    const channel = supabase.channel('market_prices');
+    channel.on('broadcast', { event: 'price_update' }, (payload) => {
+        const update = payload.payload;
+        setLiveAssets(prev => prev.map(asset => {
+            if (asset.symbol === update.symbol) {
+                return { ...asset, price: parseFloat(update.price) };
+            }
+            return asset;
+        }));
+    }).subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const filteredAssets = ASSETS.filter(asset => {
+  const filteredAssets = liveAssets.filter(asset => {
     const matchesCategory = activeCategory === 'all' || asset.type === activeCategory;
     const matchesSearch = asset.name.toLowerCase().includes(search.toLowerCase()) || 
                           asset.symbol.toLowerCase().includes(search.toLowerCase()) ||
@@ -145,7 +238,7 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
         </div>
 
         <div className="p-3 border-t border-white/5 bg-[#0b0e11]/30 text-[10px] text-center text-[#5e6673]">
-          Data provided by <span className="text-[#21ce99]">Binance</span> & <span className="text-[#21ce99]">Twelve Data</span>
+          Data provided by <span className="text-[#21ce99]">Binance</span> & <span className="text-[#21ce99]">Twelve Data Pro</span>
         </div>
 
       </div>

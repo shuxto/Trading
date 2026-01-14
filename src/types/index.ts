@@ -1,6 +1,9 @@
 import { type Time } from 'lightweight-charts';
 
-// ✅ Updated ChartStyle: Removed 'hlc-area', 'columns', 'histogram'
+// ==========================================
+// 1. FRONTEND / CHART TYPES (Keep these!)
+// ==========================================
+
 export type ChartStyle = 
   | 'candles' 
   | 'bars' 
@@ -37,7 +40,6 @@ export interface Asset {
   symbol: string;
   displaySymbol: string;
   name: string;
-  // ✅ ADDED 'index' here to fix the error
   type: 'crypto' | 'stock' | 'forex' | 'commodity' | 'index';
   price: number;
   change: number;
@@ -50,4 +52,41 @@ export interface ActiveAsset {
   displaySymbol: string;
   name: string;
   source: 'binance' | 'twelve';
+}
+
+// ==========================================
+// 2. BACKEND / DATABASE TYPES (New!)
+// ==========================================
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: 'user' | 'admin';
+  balance: number;
+  is_banned: boolean;
+  created_at: string;
+}
+
+// This 'Trade' is for the Database history (slightly different from active 'Order')
+export interface Trade {
+  id: number;
+  user_id: string;
+  symbol: string;
+  type: 'buy' | 'sell';
+  entry_price: number;
+  size: number;
+  leverage: number;
+  pnl: number;
+  status: 'open' | 'closed';
+  created_at: string;
+  closed_at?: string;
+}
+
+export interface Transaction {
+  id: number;
+  user_id: string;
+  type: 'deposit' | 'withdrawal';
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
 }

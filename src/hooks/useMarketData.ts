@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { type Time } from 'lightweight-charts';
 import type { CandleData } from '../types';
 
-// ✅ Your Paid Twelve Data Key
+// ✅ Your Paid API Key
 const TWELVE_DATA_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
 
 export function useMarketData(symbol: string, interval: string, source: 'binance' | 'twelve') {
@@ -23,11 +23,12 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
     setIsLoading(true);
 
     // ==========================================
-    // ENGINE A: BINANCE (Crypto) - Free WS
+    // ENGINE A: BINANCE (Crypto)
     // ==========================================
     if (source === 'binance') {
       const fetchBinanceHistory = async () => {
         try {
+          // Binance max limit is 1000 per call
           const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000`);
           const data = await res.json();
           if (Array.isArray(data) && symbolRef.current === symbol) {
@@ -55,7 +56,6 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
       fetchBinanceHistory();
       
       const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
-      
       ws.onmessage = (event) => {
         if (symbolRef.current !== symbol) return;
         const message = JSON.parse(event.data);
@@ -84,16 +84,26 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
     }
 
     // ==========================================
-    // ENGINE B: TWELVE DATA (Stocks/Forex) - PAID WS
+    // ENGINE B: TWELVE DATA (Stocks/Forex/Commodities)
     // ==========================================
     if (source === 'twelve') {
       
-      // 1. Fetch History (REST API) to load the chart
+      // 1. Fetch History (REST API)
       const fetchTwelveDataHistory = async () => {
         try {
-          // Adjust interval naming for Twelve Data (e.g. '1d' -> '1day')
-          const tdInterval = interval === '1d' ? '1day' : interval; 
-          const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=500`);
+          const intervalMap: Record<string, string> = {
+            '1m': '1min',
+            '5m': '5min',
+            '15m': '15min',
+            '1h': '1h',
+            '4h': '4h',
+            '1d': '1day',
+          };
+          
+          const tdInterval = intervalMap[interval] || '1day';
+          
+          // ✅ UPDATE: Increased outputsize to 5000 for deep history
+          const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`);
           const data = await res.json();
 
           if (data.values && Array.isArray(data.values) && symbolRef.current === symbol) {
@@ -124,7 +134,6 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
       fetchTwelveDataHistory();
 
       // 2. Real-Time WebSocket (Paid Feature)
-      // Documentation: https://twelvedata.com/docs#websocket-api
       const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${TWELVE_DATA_API_KEY}`);
 
       ws.onopen = () => {
@@ -138,18 +147,13 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
-        // Handle "price" event
         if (data.event === 'price' && data.symbol === symbol && symbolRef.current === symbol) {
             const price = parseFloat(data.price);
             setCurrentPrice(price);
             
-            // Update the last candle on the chart in real-time
             setCandles(prev => {
                 if (prev.length === 0) return prev;
                 const last = prev[prev.length - 1];
-                
-                // Simple tick update: update Close, High, Low
                 return [...prev.slice(0, -1), {
                    ...last,
                    close: price,
@@ -160,13 +164,7 @@ export function useMarketData(symbol: string, interval: string, source: 'binance
         }
       };
 
-      ws.onerror = (error) => {
-        console.error("Twelve Data WS Error:", error);
-      };
-
-      return () => {
-        ws.close();
-      };
+      return () => ws.close();
     }
 
   }, [symbol, interval, source]);
