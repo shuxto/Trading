@@ -8,7 +8,9 @@ export interface Order {
   size: number;
   liquidationPrice: number;
   status: 'active' | 'closed';
-  pnl?: number; // Optional, calculated on the fly usually
+  pnl?: number; 
+  takeProfit?: number; // ✅ Optional
+  stopLoss?: number;   // ✅ Optional
 }
 
 export interface Asset {
