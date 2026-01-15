@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react' // ✅ Removed useRef here
 import { supabase } from './lib/supabase'
 
 // COMPONENTS
@@ -29,7 +29,7 @@ export default function App() {
 
   // TRADING STATE
   const [orders, setOrders] = useState<Order[]>([])
-  const [history, setHistory] = useState<Order[]>([]) // ✅ ADDED: History State
+  const [history, setHistory] = useState<Order[]>([])
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
   const [chartStyle, setChartStyle] = useState<ChartStyle>('candles');
   const [clearTrigger, setClearTrigger] = useState<number>(0);
@@ -39,9 +39,7 @@ export default function App() {
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   
-  // Track Last Order Time to trigger Panel Auto-Open
   const [lastOrderTime, setLastOrderTime] = useState<number>(0);
-
   const [userBalance, setUserBalance] = useState(0); 
   
   const [activeAsset, setActiveAsset] = useState<ActiveAsset>({ 
@@ -53,7 +51,7 @@ export default function App() {
     activeAsset.symbol, timeframe, activeAsset.source
   );
 
-  // --- 1. AUTH & URL INITIALIZATION ---
+  // --- 1. AUTH & INITIALIZATION ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -107,7 +105,7 @@ export default function App() {
     setAuthLoading(false);
   };
 
-  // --- 2. FETCH ORDERS & HISTORY ---
+  // --- 2. FETCH DATA ---
   useEffect(() => {
     if (session && activeAccount) {
         fetchData();
@@ -137,12 +135,12 @@ export default function App() {
         margin: o.size / o.leverage, 
         status: o.status,
         takeProfit: o.take_profit,
-        stopLoss: o.stop_loss,
+        stop_loss: o.stop_loss,
         liquidationPrice: o.liquidation_price || 0 
       })));
     }
 
-    // B. ✅ FETCH HISTORY (CLOSED TRADES)
+    // B. FETCH HISTORY
     const { data: historyData } = await supabase
         .from('trades')
         .select('*')
@@ -158,78 +156,25 @@ export default function App() {
         symbol: o.symbol, 
         type: o.type, 
         entryPrice: o.entry_price, 
-        exitPrice: o.exit_price, // Needed for history
+        exitPrice: o.exit_price,
         size: o.size, 
         leverage: o.leverage, 
         margin: o.size / o.leverage, 
         status: o.status,
-        pnl: o.pnl, // Needed for history
-        closedAt: o.closed_at, // Needed for history
+        pnl: o.pnl,
+        closedAt: o.closed_at,
         liquidationPrice: 0 
       })));
     }
   };
 
-  // =========================================================
-  //  🔥 AUTO-CLOSE ENGINE (TP / SL / LIQUIDATION)
-  // =========================================================
-  
-  const processingOrderIds = useRef<Set<number>>(new Set());
-
-  useEffect(() => {
-    if (!currentPrice || orders.length === 0) return;
-
-    orders.forEach(order => {
-        if (processingOrderIds.current.has(order.id)) return;
-
-        let shouldClose = false;
-        let reason = '';
-
-        // 1. Check Take Profit (TP)
-        if (order.takeProfit) {
-            if (order.type === 'buy' && currentPrice >= order.takeProfit) {
-                shouldClose = true; reason = 'Take Profit';
-            } else if (order.type === 'sell' && currentPrice <= order.takeProfit) {
-                shouldClose = true; reason = 'Take Profit';
-            }
-        }
-
-        // 2. Check Stop Loss (SL)
-        if (!shouldClose && order.stopLoss) {
-            if (order.type === 'buy' && currentPrice <= order.stopLoss) {
-                shouldClose = true; reason = 'Stop Loss';
-            } else if (order.type === 'sell' && currentPrice >= order.stopLoss) {
-                shouldClose = true; reason = 'Stop Loss';
-            }
-        }
-
-        // 3. Check Liquidation (Force Close)
-        if (!shouldClose && order.liquidationPrice > 0) {
-             if (order.type === 'buy' && currentPrice <= order.liquidationPrice) {
-                 shouldClose = true; reason = 'Liquidation';
-             } else if (order.type === 'sell' && currentPrice >= order.liquidationPrice) {
-                 shouldClose = true; reason = 'Liquidation';
-             }
-        }
-
-        if (shouldClose) {
-            console.log(`⚡ Auto-closing order #${order.id} due to ${reason}`);
-            processingOrderIds.current.add(order.id);
-            handleCloseOrder(order.id);
-        }
-    });
-  }, [currentPrice, orders]);
-
-
-  // =========================================================
-  //  PRO TRADING LOGIC
-  // =========================================================
+  // --- 3. TRADING ACTIONS ---
 
   const handleTrade = async (newOrder: Order) => {
     if (!activeAccount || !session?.user) return;
 
     if (userBalance < newOrder.margin) {
-        alert("Insufficient Balance! Please deposit funds.");
+        alert("Insufficient Balance!");
         return;
     }
 
@@ -268,8 +213,6 @@ export default function App() {
 
     } catch (err) {
         console.error("Trade failed:", err);
-        alert("Trade failed. Rolling back.");
-        setUserBalance(userBalance); 
         fetchData();
     }
   };
@@ -280,51 +223,25 @@ export default function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // --- OPTIMISTIC UI UPDATE ---
     const quantity = order.size / order.entryPrice;
-    
-    let pnl = 0;
-    if (order.type === 'buy') {
-        pnl = (currentPrice - order.entryPrice) * quantity;
-    } else {
-        pnl = (order.entryPrice - currentPrice) * quantity;
-    }
+    const estPnl = order.type === 'buy' ? (currentPrice - order.entryPrice) * quantity : (order.entryPrice - currentPrice) * quantity;
+    const estReturn = order.margin + estPnl;
 
-    const margin = order.margin; 
-    const settlementAmount = margin + pnl;
-    const finalNewBalance = userBalance + settlementAmount;
-
-    // 1. OPTIMISTIC UPDATE
     setOrders(prev => prev.filter(o => o.id !== orderId)); 
-    setUserBalance(finalNewBalance); 
+    setUserBalance(prev => prev + estReturn); 
     setLastOrderTime(Date.now());
 
-    // ✅ Add to History Optimistically
-    const closedOrder = { ...order, status: 'closed', exitPrice: currentPrice, pnl, closedAt: new Date().toISOString() };
-    setHistory(prev => [closedOrder as Order, ...prev]);
-
-    if (processingOrderIds.current.has(orderId)) {
-        setTimeout(() => processingOrderIds.current.delete(orderId), 1000);
-    }
-
     try {
-        const { error: tradeError } = await supabase
-            .from('trades')
-            .update({ 
-                status: 'closed',
-                exit_price: currentPrice,
-                pnl: pnl,
-                closed_at: new Date().toISOString()
-            })
-            .eq('id', orderId);
+        // CALLING THE SECURE RPC FUNCTION
+        const { error } = await supabase.rpc('close_trade_position', { 
+           p_trade_id: orderId, 
+           p_exit_price: currentPrice 
+        });
 
-        if (tradeError) throw tradeError;
-
-        const { error: balanceError } = await supabase
-            .from('profiles')
-            .update({ balance: finalNewBalance })
-            .eq('id', session.user.id);
-
-        if (balanceError) throw balanceError;
+        if (error) throw error;
+        fetchData(); 
+        checkRole(session.user.id); 
 
     } catch (err) {
         console.error("Close failed:", err);
@@ -333,20 +250,14 @@ export default function App() {
     }
   };
 
-  // --- 3. RENDER LOGIC ---
+  // --- 4. RENDER ---
 
   if (authLoading) return <div className="h-screen bg-[#0b0e11] flex items-center justify-center text-[#21ce99] font-bold">Loading...</div>;
   if (!session) return <LoginPage />;
   if (role === 'admin') return <AdminPanel onLogout={() => supabase.auth.signOut()} />;
 
   if (currentView === 'portal') {
-    return (
-      <ClientDashboard 
-        userEmail={session.user.email}
-        balance={userBalance} 
-        onLogout={() => supabase.auth.signOut()}
-      />
-    );
+    return <ClientDashboard userEmail={session.user.email} balance={userBalance} onLogout={() => supabase.auth.signOut()} />;
   }
 
   return (
@@ -394,15 +305,15 @@ export default function App() {
              activeAccountId={activeAccount?.id || 0}
           />
         </main>
-        <OrderPanel 
-          currentPrice={currentPrice} 
-          activeSymbol={activeAsset.symbol} 
-          onTrade={handleTrade} 
-          activeAccountId={activeAccount?.id || 0} 
-        />
+<OrderPanel 
+  currentPrice={currentPrice} 
+  activeSymbol={activeAsset.symbol} 
+  onTrade={handleTrade} 
+  activeAccountId={activeAccount?.id || 0} 
+  balance={userBalance} // ✅ Add this line to pass the real balance
+/>
       </div>
       
-      {/* ✅ PASSED HISTORY PROP */}
       <PositionsPanel 
         orders={orders} 
         history={history} 
