@@ -1,110 +1,154 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Lock, Mail } from 'lucide-react';
+import { LayoutDashboard, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+    setLoading(true);
+
+    // 1. Clean inputs (just remove spaces)
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    // 2. ZERO EMAIL RESTRICTIONS (We removed the Regex check)
+    if (!cleanEmail) {
+       setError("Please enter an email");
+       setLoading(false);
+       return;
+    }
+
+    if (cleanPassword.length < 1) {
+       setError("Please enter a password");
+       setLoading(false);
+       return;
+    }
 
     try {
       if (isLogin) {
-        // LOGIN
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        // --- LOGIN LOGIC ---
+        const { error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: cleanPassword,
+        });
         if (error) throw error;
       } else {
-        // REGISTER
-        const { error } = await supabase.auth.signUp({ email, password });
+        // --- REGISTER LOGIC ---
+        const { error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password: cleanPassword,
+          options: {
+            data: {
+              role: 'user', // Default role
+              balance: 10000, // Starting Demo Balance
+            },
+          },
+        });
         if (error) throw error;
-        alert('Registration successful! You are logged in.');
+        else {
+          alert("Registration Successful! You can now log in.");
+          setIsLogin(true); // Switch to login mode
+        }
       }
     } catch (err: any) {
-      setError(err.message);
+      // Let Supabase tell us if it's wrong (e.g. "Invalid login credentials")
+      setError(err.message || "An error occurred");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#0b0e11] flex items-center justify-center relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#21ce99]/20 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]" />
+    <div className="min-h-screen bg-[#0b0e11] flex flex-col items-center justify-center p-4">
+      
+      {/* LOGO AREA */}
+      <div className="mb-8 text-center">
+        <div className="h-16 w-16 bg-[#21ce99]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#21ce99]/20 shadow-[0_0_30px_rgba(33,206,153,0.2)]">
+          <LayoutDashboard size={32} className="text-[#21ce99]" />
+        </div>
+        <h1 className="text-3xl font-black text-white tracking-tight">TRADING<span className="text-[#21ce99]">CRM</span></h1>
+        <p className="text-[#5e6673] mt-2">Professional Trading Terminal</p>
+      </div>
 
-      <div className="w-full max-w-md bg-[#151a21]/80 backdrop-blur-xl border border-[#2a2e39] p-8 rounded-2xl shadow-2xl relative z-10">
-        
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-gradient-to-br from-[#21ce99] to-blue-600 rounded-xl mx-auto flex items-center justify-center shadow-lg mb-4">
-            <span className="font-black text-black text-xl">T</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            {isLogin ? 'Welcome Back' : 'Create Account'}
-          </h1>
-          <p className="text-[#5e6673] text-sm mt-2">
-            Professional Trading Platform
-          </p>
+      {/* AUTH CARD */}
+      <div className="w-full max-w-md bg-[#1e232d] border border-[#2a2e39] rounded-2xl p-8 shadow-2xl">
+        <div className="flex gap-4 mb-8 p-1 bg-[#151a21] rounded-xl">
+          <button
+            onClick={() => { setIsLogin(true); setError(null); }}
+            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${
+              isLogin ? 'bg-[#2a2e39] text-white shadow-md' : 'text-[#8b9bb4] hover:text-white'
+            }`}
+          >
+            Log In
+          </button>
+          <button
+            onClick={() => { setIsLogin(false); setError(null); }}
+            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${
+              !isLogin ? 'bg-[#2a2e39] text-white shadow-md' : 'text-[#8b9bb4] hover:text-white'
+            }`}
+          >
+            Register
+          </button>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-[#f23645]/10 border border-[#f23645]/50 rounded-lg text-[#f23645] text-xs text-center font-bold">
-            {error}
-          </div>
-        )}
+        <form onSubmit={handleAuth} className="space-y-5">
+          {error && (
+            <div className="p-3 bg-[#f23645]/10 border border-[#f23645]/30 rounded-lg text-[#f23645] text-xs font-bold text-center">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-[#8b9bb4] uppercase ml-1">Email</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[#8b9bb4] uppercase ml-1">Email Address</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5e6673]" size={18} />
-              <input 
-                type="email" 
-                required
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5e6673]" size={18} />
+              <input
+                type="text" // changed from 'email' to 'text' to stop browser nagging
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-10 pr-4 text-white focus:border-[#21ce99] outline-none transition-all"
-                placeholder="trader@example.com"
+                placeholder="Enter anything..."
+                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-11 pr-4 text-white placeholder-[#5e6673] focus:border-[#21ce99] outline-none transition-colors font-medium"
               />
             </div>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-xs font-bold text-[#8b9bb4] uppercase ml-1">Password</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5e6673]" size={18} />
-              <input 
-                type="password" 
-                required
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5e6673]" size={18} />
+              <input
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-10 pr-4 text-white focus:border-[#21ce99] outline-none transition-all"
                 placeholder="••••••••"
+                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-11 pr-4 text-white placeholder-[#5e6673] focus:border-[#21ce99] outline-none transition-colors font-medium"
               />
             </div>
           </div>
 
-          <button 
+          <button
+            type="submit"
             disabled={loading}
-            className="w-full bg-[#21ce99] hover:bg-[#1db586] text-[#0b0e11] font-bold py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(33,206,153,0.3)] mt-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-[#21ce99] hover:bg-[#1aa37a] text-[#0b0e11] font-bold py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(33,206,153,0.3)] hover:shadow-[0_0_30px_rgba(33,206,153,0.5)] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (isLogin ? 'Sign In' : 'Create Account')}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : (
+              <>
+                {isLogin ? 'Access Terminal' : 'Create Account'} <ArrowRight size={20} />
+              </>
+            )}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button 
-            onClick={() => setIsLogin(!isLogin)}
-            className="text-xs text-[#5e6673] hover:text-white transition-colors font-medium"
-          >
-            {isLogin ? "Don't have an account? Register" : "Already have an account? Sign In"}
-          </button>
-        </div>
+        <p className="mt-6 text-center text-xs text-[#5e6673]">
+          By continuing, you agree to our <span className="text-[#21ce99] cursor-pointer hover:underline">Terms of Service</span>.
+        </p>
       </div>
     </div>
   );
