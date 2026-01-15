@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 
 // COMPONENTS
@@ -29,6 +29,7 @@ export default function App() {
 
   // TRADING STATE
   const [orders, setOrders] = useState<Order[]>([])
+  const [history, setHistory] = useState<Order[]>([]) // ✅ ADDED: History State
   const [activeTool, setActiveTool] = useState<string | null>('crosshair');
   const [chartStyle, setChartStyle] = useState<ChartStyle>('candles');
   const [clearTrigger, setClearTrigger] = useState<number>(0);
@@ -106,24 +107,26 @@ export default function App() {
     setAuthLoading(false);
   };
 
-  // --- 2. FETCH ORDERS ---
+  // --- 2. FETCH ORDERS & HISTORY ---
   useEffect(() => {
     if (session && activeAccount) {
-        fetchOrders();
+        fetchData();
     }
   }, [session, activeAccount]);
 
-  const fetchOrders = async () => {
+  const fetchData = async () => {
     if (!activeAccount) return;
-    const { data } = await supabase
+
+    // A. FETCH ACTIVE ORDERS
+    const { data: activeData } = await supabase
         .from('trades')
         .select('*')
         .eq('status', 'open')
         .eq('account_id', activeAccount.id) 
         .order('created_at', { ascending: false });
 
-    if (data) {
-      setOrders(data.map(o => ({
+    if (activeData) {
+      setOrders(activeData.map(o => ({
         id: o.id, 
         account_id: o.account_id, 
         symbol: o.symbol, 
@@ -132,37 +135,202 @@ export default function App() {
         size: o.size, 
         leverage: o.leverage, 
         margin: o.size / o.leverage, 
-        liquidationPrice: 0, 
-        status: o.status
+        status: o.status,
+        takeProfit: o.take_profit,
+        stopLoss: o.stop_loss,
+        liquidationPrice: o.liquidation_price || 0 
+      })));
+    }
+
+    // B. ✅ FETCH HISTORY (CLOSED TRADES)
+    const { data: historyData } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('status', 'closed')
+        .eq('account_id', activeAccount.id) 
+        .order('closed_at', { ascending: false })
+        .limit(50); 
+
+    if (historyData) {
+      setHistory(historyData.map(o => ({
+        id: o.id, 
+        account_id: o.account_id, 
+        symbol: o.symbol, 
+        type: o.type, 
+        entryPrice: o.entry_price, 
+        exitPrice: o.exit_price, // Needed for history
+        size: o.size, 
+        leverage: o.leverage, 
+        margin: o.size / o.leverage, 
+        status: o.status,
+        pnl: o.pnl, // Needed for history
+        closedAt: o.closed_at, // Needed for history
+        liquidationPrice: 0 
       })));
     }
   };
 
+  // =========================================================
+  //  🔥 AUTO-CLOSE ENGINE (TP / SL / LIQUIDATION)
+  // =========================================================
+  
+  const processingOrderIds = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!currentPrice || orders.length === 0) return;
+
+    orders.forEach(order => {
+        if (processingOrderIds.current.has(order.id)) return;
+
+        let shouldClose = false;
+        let reason = '';
+
+        // 1. Check Take Profit (TP)
+        if (order.takeProfit) {
+            if (order.type === 'buy' && currentPrice >= order.takeProfit) {
+                shouldClose = true; reason = 'Take Profit';
+            } else if (order.type === 'sell' && currentPrice <= order.takeProfit) {
+                shouldClose = true; reason = 'Take Profit';
+            }
+        }
+
+        // 2. Check Stop Loss (SL)
+        if (!shouldClose && order.stopLoss) {
+            if (order.type === 'buy' && currentPrice <= order.stopLoss) {
+                shouldClose = true; reason = 'Stop Loss';
+            } else if (order.type === 'sell' && currentPrice >= order.stopLoss) {
+                shouldClose = true; reason = 'Stop Loss';
+            }
+        }
+
+        // 3. Check Liquidation (Force Close)
+        if (!shouldClose && order.liquidationPrice > 0) {
+             if (order.type === 'buy' && currentPrice <= order.liquidationPrice) {
+                 shouldClose = true; reason = 'Liquidation';
+             } else if (order.type === 'sell' && currentPrice >= order.liquidationPrice) {
+                 shouldClose = true; reason = 'Liquidation';
+             }
+        }
+
+        if (shouldClose) {
+            console.log(`⚡ Auto-closing order #${order.id} due to ${reason}`);
+            processingOrderIds.current.add(order.id);
+            handleCloseOrder(order.id);
+        }
+    });
+  }, [currentPrice, orders]);
+
+
+  // =========================================================
+  //  PRO TRADING LOGIC
+  // =========================================================
+
   const handleTrade = async (newOrder: Order) => {
-    if (!activeAccount) return;
+    if (!activeAccount || !session?.user) return;
+
     if (userBalance < newOrder.margin) {
-        alert("Insufficient Funds in Global Wallet");
+        alert("Insufficient Balance! Please deposit funds.");
         return;
     }
-    setOrders([newOrder, ...orders]);
-    setLastOrderTime(Date.now()); // Trigger Panel Auto-Open
-    await supabase.from('trades').insert([{
-        user_id: session.user.id, 
-        account_id: activeAccount.id, 
-        symbol: newOrder.symbol, 
-        type: newOrder.type, 
-        entry_price: newOrder.entryPrice, 
-        size: newOrder.size, 
-        leverage: newOrder.leverage, 
-        status: 'open'
-    }]);
-    fetchOrders(); 
+
+    const newBalance = userBalance - newOrder.margin;
+    setUserBalance(newBalance); 
+    setOrders([newOrder, ...orders]); 
+    setLastOrderTime(Date.now()); 
+
+    try {
+        const { error: balanceError } = await supabase
+            .from('profiles')
+            .update({ balance: newBalance })
+            .eq('id', session.user.id);
+
+        if (balanceError) throw balanceError;
+
+        const { error: tradeError } = await supabase
+            .from('trades')
+            .insert([{
+                user_id: session.user.id, 
+                account_id: activeAccount.id, 
+                symbol: newOrder.symbol, 
+                type: newOrder.type, 
+                entry_price: newOrder.entryPrice, 
+                size: newOrder.size, 
+                leverage: newOrder.leverage, 
+                status: 'open',
+                margin: newOrder.margin,
+                take_profit: newOrder.takeProfit,
+                stop_loss: newOrder.stopLoss,
+                liquidation_price: newOrder.liquidationPrice 
+            }]);
+
+        if (tradeError) throw tradeError;
+        fetchData(); 
+
+    } catch (err) {
+        console.error("Trade failed:", err);
+        alert("Trade failed. Rolling back.");
+        setUserBalance(userBalance); 
+        fetchData();
+    }
   };
 
   const handleCloseOrder = async (orderId: number) => {
-    setOrders(prev => prev.filter(o => o.id !== orderId));
-    setLastOrderTime(Date.now()); // Trigger Panel Auto-Open
-    await supabase.from('trades').delete().eq('id', orderId);
+    if (!currentPrice || !session?.user) return;
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const quantity = order.size / order.entryPrice;
+    
+    let pnl = 0;
+    if (order.type === 'buy') {
+        pnl = (currentPrice - order.entryPrice) * quantity;
+    } else {
+        pnl = (order.entryPrice - currentPrice) * quantity;
+    }
+
+    const margin = order.margin; 
+    const settlementAmount = margin + pnl;
+    const finalNewBalance = userBalance + settlementAmount;
+
+    // 1. OPTIMISTIC UPDATE
+    setOrders(prev => prev.filter(o => o.id !== orderId)); 
+    setUserBalance(finalNewBalance); 
+    setLastOrderTime(Date.now());
+
+    // ✅ Add to History Optimistically
+    const closedOrder = { ...order, status: 'closed', exitPrice: currentPrice, pnl, closedAt: new Date().toISOString() };
+    setHistory(prev => [closedOrder as Order, ...prev]);
+
+    if (processingOrderIds.current.has(orderId)) {
+        setTimeout(() => processingOrderIds.current.delete(orderId), 1000);
+    }
+
+    try {
+        const { error: tradeError } = await supabase
+            .from('trades')
+            .update({ 
+                status: 'closed',
+                exit_price: currentPrice,
+                pnl: pnl,
+                closed_at: new Date().toISOString()
+            })
+            .eq('id', orderId);
+
+        if (tradeError) throw tradeError;
+
+        const { error: balanceError } = await supabase
+            .from('profiles')
+            .update({ balance: finalNewBalance })
+            .eq('id', session.user.id);
+
+        if (balanceError) throw balanceError;
+
+    } catch (err) {
+        console.error("Close failed:", err);
+        fetchData(); 
+        checkRole(session.user.id); 
+    }
   };
 
   // --- 3. RENDER LOGIC ---
@@ -226,7 +394,6 @@ export default function App() {
              activeAccountId={activeAccount?.id || 0}
           />
         </main>
-        {/* ✅ FIXED: Passing activeAccountId here */}
         <OrderPanel 
           currentPrice={currentPrice} 
           activeSymbol={activeAsset.symbol} 
@@ -235,8 +402,10 @@ export default function App() {
         />
       </div>
       
+      {/* ✅ PASSED HISTORY PROP */}
       <PositionsPanel 
         orders={orders} 
+        history={history} 
         currentPrice={currentPrice} 
         onCloseOrder={handleCloseOrder} 
         lastOrderTime={lastOrderTime} 

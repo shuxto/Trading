@@ -8,7 +8,6 @@ interface OrderPanelProps {
   currentPrice: number | null; 
   activeSymbol: string;
   onTrade: (order: Order) => void;
-  // ✅ NEW PROP
   activeAccountId: number; 
 }
 
@@ -17,11 +16,10 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   
   // --- STATE ---
   const [tradingMode, setTradingMode] = useState<'spot' | 'futures'>('spot');
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
+  const [orderType, setOrderType] = useState<'market'>('market'); // Remove | 'limit'
   const [leverage, setLeverage] = useState<number>(20);
   const [margin, setMargin] = useState<number>(100);
 
-  // Mobile Expansion State
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
 
   // TP/SL State
@@ -38,13 +36,12 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   const liqPriceLong = price > 0 ? price * (1 - (1 / effectiveLeverage)) : 0;
   const liqPriceShort = price > 0 ? price * (1 + (1 / effectiveLeverage)) : 0;
 
-  // Auto-fill TP/SL
+  // Auto-fill TP/SL defaults when toggled
   useEffect(() => {
     if (tpEnabled && !tpPrice && price > 0) setTpPrice((price * 1.05).toFixed(2));
     if (slEnabled && !slPrice && price > 0) setSlPrice((price * 0.95).toFixed(2));
   }, [tpEnabled, slEnabled, price]);
 
-  // Reset TP/SL when switching to Spot
   useEffect(() => {
     if (tradingMode === 'spot') {
       setTpEnabled(false);
@@ -52,24 +49,19 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     }
   }, [tradingMode]);
 
-  // Handle Resize for Desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
-        setIsMobileExpanded(true); // Always expanded on desktop
+        setIsMobileExpanded(true); 
       } else {
-        setIsMobileExpanded(false); // Default collapsed on mobile
+        setIsMobileExpanded(false); 
       }
     };
-    
-    // Initial check
     handleResize();
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Helper for % diff
   const getDiff = (targetPrice: string) => {
     if (!price || !targetPrice) return '0.00';
     const val = parseFloat(targetPrice);
@@ -80,11 +72,40 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
   const handleTrade = (side: 'buy' | 'sell') => {
     if (price <= 0) return;
+
+    // --- 🛡️ KILLER BUG FIX: VALIDATION START ---
+    
+    // 1. Check Take Profit Logic
+    if (tpEnabled && tpPrice) {
+      const tp = parseFloat(tpPrice);
+      if (side === 'buy' && tp <= price) {
+        alert("⚠️ INVALID LONG: Take Profit must be HIGHER than current price.");
+        return;
+      }
+      if (side === 'sell' && tp >= price) {
+        alert("⚠️ INVALID SHORT: Take Profit must be LOWER than current price.");
+        return;
+      }
+    }
+
+    // 2. Check Stop Loss Logic
+    if (slEnabled && slPrice) {
+      const sl = parseFloat(slPrice);
+      if (side === 'buy' && sl >= price) {
+        alert("⚠️ INVALID LONG: Stop Loss must be LOWER than current price.");
+        return;
+      }
+      if (side === 'sell' && sl <= price) {
+        alert("⚠️ INVALID SHORT: Stop Loss must be HIGHER than current price.");
+        return;
+      }
+    }
+    // --- 🛡️ KILLER BUG FIX: VALIDATION END ---
+
     playClick();
 
     const newOrder: Order = {
       id: Date.now(),
-      // ✅ FIXED: Using the passed prop
       account_id: activeAccountId, 
       type: side,
       symbol: activeSymbol,
@@ -119,7 +140,6 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         </div>
       </div>
 
-      {/* SCROLLABLE CONTENT AREA */}
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5 
         ${isMobileExpanded ? 'block' : 'hidden'} md:block`}>
         
@@ -152,8 +172,9 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         </div>
         
         {/* ORDER TYPE */}
+        {/* ORDER TYPE */}
         <div className="flex gap-2">
-            {['market', 'limit'].map((type) => (
+          {['market'].map((type) => ( // <--- NEW (Just 'market')
             <button
                 key={type}
                 onClick={() => setOrderType(type as any)}
@@ -168,7 +189,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
             ))}
         </div>
 
-        {/* LEVERAGE (Futures Only) */}
+        {/* LEVERAGE */}
         <AnimatePresence>
             {tradingMode === 'futures' && (
             <motion.div 
@@ -207,6 +228,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         <AnimatePresence>
           {tradingMode === 'futures' && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-white/[0.03] rounded-xl p-3 border border-white/5 space-y-3 overflow-hidden">
+              {/* TAKE PROFIT */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -228,6 +250,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
                 </AnimatePresence>
               </div>
               <div className="h-[1px] bg-white/5 w-full"></div>
+              {/* STOP LOSS */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -277,7 +300,6 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         </div>
       </div>
 
-      {/* ACTION BUTTONS (ALWAYS VISIBLE) */}
       <div className="p-4 grid grid-cols-2 gap-3 mt-auto bg-black/20 backdrop-blur-md border-t border-white/5">
         <motion.button 
           whileHover={{ scale: 1.02, filter: "brightness(1.1)" }}

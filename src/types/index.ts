@@ -23,7 +23,7 @@ export interface CandleData {
 
 export interface Order {
   id: number;
-  account_id: number; // <--- NEW: Links order to a specific "Room"
+  account_id: number; 
   type: 'buy' | 'sell';
   symbol: string;
   entryPrice: number;
@@ -31,10 +31,14 @@ export interface Order {
   leverage: number;
   size: number;
   liquidationPrice: number;
-  status: 'active' | 'closed';
+  status: 'active' | 'closed' | 'open'; // ✅ ADDED 'open' to match DB
   pnl?: number; 
   takeProfit?: number; 
   stopLoss?: number;   
+  
+  // ✅ NEW: Added these so History Tab works
+  exitPrice?: number;
+  closedAt?: string;
 }
 
 export interface Asset {
@@ -63,23 +67,21 @@ export interface UserProfile {
   id: string;
   email: string;
   role: 'user' | 'admin';
-  balance: number; // <--- The Shared Global Wallet
+  balance: number; 
   is_banned: boolean;
   created_at: string;
 }
 
-// Represents a "Trading Room" or Strategy
 export interface TradingAccount {
   id: number;
   user_id: string;
   name: string;
   created_at: string;
-  // NOTE: No balance here. Money is taken from UserProfile.
 }
 
 export interface Trade {
   id: number;
-  account_id: number; // <--- NEW: Separates history per room
+  account_id: number;
   user_id: string;
   symbol: string;
   type: 'buy' | 'sell';
