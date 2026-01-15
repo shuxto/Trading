@@ -1,7 +1,7 @@
 import { type Time } from 'lightweight-charts';
 
 // ==========================================
-// 1. FRONTEND / CHART TYPES (Keep these!)
+// 1. FRONTEND / CHART TYPES
 // ==========================================
 
 export type ChartStyle = 
@@ -23,6 +23,7 @@ export interface CandleData {
 
 export interface Order {
   id: number;
+  account_id: number; // <--- NEW: Links order to a specific "Room"
   type: 'buy' | 'sell';
   symbol: string;
   entryPrice: number;
@@ -55,21 +56,30 @@ export interface ActiveAsset {
 }
 
 // ==========================================
-// 2. BACKEND / DATABASE TYPES (New!)
+// 2. BACKEND / DATABASE TYPES
 // ==========================================
 
 export interface UserProfile {
   id: string;
   email: string;
   role: 'user' | 'admin';
-  balance: number;
+  balance: number; // <--- The Shared Global Wallet
   is_banned: boolean;
   created_at: string;
 }
 
-// This 'Trade' is for the Database history (slightly different from active 'Order')
+// Represents a "Trading Room" or Strategy
+export interface TradingAccount {
+  id: number;
+  user_id: string;
+  name: string;
+  created_at: string;
+  // NOTE: No balance here. Money is taken from UserProfile.
+}
+
 export interface Trade {
   id: number;
+  account_id: number; // <--- NEW: Separates history per room
   user_id: string;
   symbol: string;
   type: 'buy' | 'sell';

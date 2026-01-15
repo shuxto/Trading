@@ -14,11 +14,11 @@ import {
   type Time,
   type LineWidth 
 } from 'lightweight-charts';
-import { useClock } from '../hooks/useClock';
+// REMOVED: import { useClock } from '../hooks/useClock';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
-import { Lock, Loader2, Clock, AlertTriangle, X, Check } from 'lucide-react';
+import { Lock, Loader2, AlertTriangle, X, Check } from 'lucide-react'; // REMOVED: Clock
 import type { Order, ChartStyle, CandleData } from '../types';
 
 interface ChartProps {
@@ -41,6 +41,7 @@ interface ChartProps {
   symbol: string;
   displaySymbol: string;
   onTriggerPremium: () => void;
+  activeAccountId: number; 
 }
 
 export default function Chart({ 
@@ -48,13 +49,14 @@ export default function Chart({
   activeTimeframe, onTimeframeChange, chartStyle,
   activeOrders, onTrade, onCloseOrder,
   activeTool, onToolComplete, clearTrigger, removeSelectedTrigger, 
-  isLocked, isHidden, displaySymbol, onTriggerPremium, symbol 
+  isLocked, isHidden, displaySymbol, onTriggerPremium, symbol,
+  activeAccountId 
 }: ChartProps) {
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   const [activeRange, setActiveRange] = useState<string | null>(null);
-  const currentTime = useClock();
+  // REMOVED: const currentTime = useClock();
 
   const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
     visible: false, x: 0, y: 0, price: 0
@@ -100,6 +102,7 @@ export default function Chart({
     const { type, price } = confirmAction;
     const newOrder: Order = {
       id: Date.now(),
+      account_id: activeAccountId, 
       type: type,
       symbol: displaySymbol,
       entryPrice: price,
@@ -210,13 +213,13 @@ export default function Chart({
     // 2. Create Volume Series 
     if (chartStyle === 'candles' || chartStyle === 'bars') {
        const volSeries = chart.addSeries(HistogramSeries, {
-          color: '#26a69a',
-          priceFormat: { type: 'volume' },
-          priceScaleId: '', 
+         color: '#26a69a',
+         priceFormat: { type: 'volume' },
+         priceScaleId: '', 
        });
        
        volSeries.priceScale().applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
+         scaleMargins: { top: 0.8, bottom: 0 },
        });
        volumeSeriesRef.current = volSeries;
     }
@@ -261,11 +264,9 @@ export default function Chart({
     }
   }, [activeTool]);
 
-  // --- DATA UPDATE (Fixed) ---
+  // --- DATA UPDATE ---
   useEffect(() => {
     if (seriesRef.current) {
-      // ✅ Removed the "&& candles.length > 0" check here.
-      // Now, if candles is empty (loading), we allow setData([]) to clear the chart.
       
       if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
          (seriesRef.current as ISeriesApi<"Line">).setData(candles.map(c => ({ time: c.time, value: c.close })));
@@ -274,10 +275,10 @@ export default function Chart({
       }
 
       if (volumeSeriesRef.current) {
-          volumeSeriesRef.current.setData(candles.map(c => ({
-            time: c.time,
-            value: c.volume || 0,
-            color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
+         volumeSeriesRef.current.setData(candles.map(c => ({
+           time: c.time,
+           value: c.volume || 0,
+           color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
          })));
       }
 
@@ -422,21 +423,6 @@ export default function Chart({
       
       {/* Pulsing Dot (Area Only) */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}></div>
-      
-      <div className="absolute bottom-0 left-0 right-0 h-8 bg-[#0b0e11] z-[100] border-t border-[#1e232d] flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-             <div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse shadow-[0_0_10px_#21ce99]"></div>
-             <span className="text-[10px] text-[#21ce99] font-mono font-bold tracking-widest">LIVE</span>
-          </div>
-          <div className="h-3 w-[1px] bg-[#2a2e39]"></div>
-          <span className="text-[10px] text-white font-mono font-bold">{currentPrice ? currentPrice.toFixed(2) : '---'}</span>
-        </div>
-        <div className="flex items-center gap-2 text-[#5e6673]">
-           <Clock size={12} />
-           <span className="text-[10px] font-mono font-bold tabular-nums">{currentTime}</span>
-        </div>
-      </div>
 
       {menuState.visible && (
         <ChartContextMenu 
