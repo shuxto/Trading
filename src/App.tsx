@@ -38,7 +38,7 @@ export default function App() {
   const [isAssetSelectorOpen, setIsAssetSelectorOpen] = useState(false);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   
-  // NEW: Track Last Order Time to trigger Panel Auto-Open
+  // Track Last Order Time to trigger Panel Auto-Open
   const [lastOrderTime, setLastOrderTime] = useState<number>(0);
 
   const [userBalance, setUserBalance] = useState(0); 
@@ -145,10 +145,7 @@ export default function App() {
         return;
     }
     setOrders([newOrder, ...orders]);
-    
-    // TRIGGER AUTO-OPEN
-    setLastOrderTime(Date.now());
-
+    setLastOrderTime(Date.now()); // Trigger Panel Auto-Open
     await supabase.from('trades').insert([{
         user_id: session.user.id, 
         account_id: activeAccount.id, 
@@ -164,10 +161,7 @@ export default function App() {
 
   const handleCloseOrder = async (orderId: number) => {
     setOrders(prev => prev.filter(o => o.id !== orderId));
-    
-    // TRIGGER AUTO-OPEN (Optional, usually we only open on New Trade, but user asked for "Buy/Sell/Close")
-    setLastOrderTime(Date.now());
-
+    setLastOrderTime(Date.now()); // Trigger Panel Auto-Open
     await supabase.from('trades').delete().eq('id', orderId);
   };
 
@@ -232,10 +226,15 @@ export default function App() {
              activeAccountId={activeAccount?.id || 0}
           />
         </main>
-        <OrderPanel currentPrice={currentPrice} activeSymbol={activeAsset.symbol} onTrade={handleTrade} />
+        {/* ✅ FIXED: Passing activeAccountId here */}
+        <OrderPanel 
+          currentPrice={currentPrice} 
+          activeSymbol={activeAsset.symbol} 
+          onTrade={handleTrade} 
+          activeAccountId={activeAccount?.id || 0} 
+        />
       </div>
       
-      {/* PASS THE TRIGGER HERE */}
       <PositionsPanel 
         orders={orders} 
         currentPrice={currentPrice} 

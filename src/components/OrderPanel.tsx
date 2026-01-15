@@ -8,9 +8,11 @@ interface OrderPanelProps {
   currentPrice: number | null; 
   activeSymbol: string;
   onTrade: (order: Order) => void;
+  // ✅ NEW PROP
+  activeAccountId: number; 
 }
 
-export default function OrderPanel({ currentPrice, activeSymbol, onTrade }: OrderPanelProps) {
+export default function OrderPanel({ currentPrice, activeSymbol, onTrade, activeAccountId }: OrderPanelProps) {
   const playClick = useClickSound();
   
   // --- STATE ---
@@ -82,6 +84,8 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade }: Orde
 
     const newOrder: Order = {
       id: Date.now(),
+      // ✅ FIXED: Using the passed prop
+      account_id: activeAccountId, 
       type: side,
       symbol: activeSymbol,
       entryPrice: price,
@@ -110,13 +114,12 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade }: Orde
         onClick={() => setIsMobileExpanded(!isMobileExpanded)}
       >
         <div className="w-12 h-1 bg-gray-600 rounded-full mb-1"></div>
-        {/* Optional Icon indicator */}
         <div className="absolute right-4 text-gray-500">
            {isMobileExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </div>
       </div>
 
-      {/* SCROLLABLE CONTENT AREA (Hidden when collapsed on mobile) */}
+      {/* SCROLLABLE CONTENT AREA */}
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5 
         ${isMobileExpanded ? 'block' : 'hidden'} md:block`}>
         
@@ -200,7 +203,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade }: Orde
            </div>
         </div>
 
-        {/* TP / SL SECTION (ONLY VISIBLE IN FUTURES) */}
+        {/* TP / SL SECTION */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="bg-white/[0.03] rounded-xl p-3 border border-white/5 space-y-3 overflow-hidden">
