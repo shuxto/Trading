@@ -16,7 +16,7 @@ import AdminOverviewTab from './admin/AdminOverviewTab';
 import AdminBankingTab from './admin/AdminBankingTab';
 import AdminUsersTab from './admin/AdminUsersTab';
 import AdminVerificationTab from './admin/AdminVerificationTab';
-import GlassModal from './ui/GlassModal'; // ✅ IMPORT NEW MODAL
+import GlassModal from './ui/GlassModal'; 
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -30,7 +30,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const [users, setUsers] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  // ✅ MODAL STATE
+  // MODAL STATE
   const [modal, setModal] = useState({
     isOpen: false,
     title: '',
@@ -60,7 +60,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
-  // ✅ HELPER: Open Confirmation Modal
+  // HELPER: Open Confirmation Modal
   const confirmAction = (title: string, desc: string, type: 'warning' | 'danger' | 'success', action: () => Promise<void>) => {
     setModal({
       isOpen: true,
@@ -70,21 +70,53 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       confirmText: 'Confirm',
       onConfirm: async () => {
          await action();
-         // Show Success Alert after action
          setModal({ 
             isOpen: true, 
             title: 'Success', 
             description: 'Operation completed successfully.', 
             type: 'success', 
             confirmText: 'Awesome',
-            onConfirm: undefined // undefined means it's just an alert (no cancel button)
+            onConfirm: undefined 
          });
          fetchData();
       }
     });
   };
 
-  // --- ACTIONS (Now using Glass Modal) ---
+ // ✅ 1. THE NUCLEAR LOGOUT FUNCTION (Now uses onLogout to fix error)
+  const handleLogoutClick = () => {
+    setModal({
+      isOpen: true,
+      title: "Sign Out",
+      description: "Are you sure you want to log out?",
+      type: "warning",
+      confirmText: "Sign Out",
+      onConfirm: async () => {
+        // Close modal first
+        setModal(prev => ({ ...prev, isOpen: false }));
+        
+        try {
+          // 1. Tell parent we are logging out (Fixes the TypeScript error)
+          onLogout();
+
+          // 2. Tell Supabase to kill session
+          await supabase.auth.signOut();
+          
+          // 3. FORCE KILL LOCAL STORAGE
+          localStorage.clear(); 
+          sessionStorage.clear();
+
+          // 4. Force Reload Page
+          window.location.href = "/";
+        } catch (error) {
+           console.error("Logout error", error);
+           window.location.href = "/";
+        }
+      }
+    });
+  };
+
+  // --- ACTIONS ---
 
   const handleApproveDeposit = (txnId: number) => {
     confirmAction(
@@ -134,7 +166,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     );
   };
 
-
   const renderContent = () => {
     switch (activeTab) {
       case 'overview': return <AdminOverviewTab stats={stats} />;
@@ -148,7 +179,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   return (
     <div className="min-h-screen bg-[#0b0e11] text-white font-sans flex">
       
-      {/* ✅ RENDER THE GLASS MODAL */}
       <GlassModal 
         isOpen={modal.isOpen}
         onClose={() => setModal({ ...modal, isOpen: false })}
@@ -173,6 +203,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
+          {/* ... (Nav buttons remain the same) ... */}
           <button onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
             <LayoutDashboard size={20} /> Overview
           </button>
@@ -189,7 +220,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         </nav>
 
         <div className="p-4 border-t border-[#2a2e39]">
-          <button onClick={onLogout} className="w-full flex items-center gap-2 text-[#f23645] px-4 py-2 hover:bg-[#f23645]/10 rounded-lg transition-colors">
+          {/* ✅ 2. CONNECTED THE NEW HANDLER HERE */}
+          <button onClick={handleLogoutClick} className="w-full flex items-center gap-2 text-[#f23645] px-4 py-2 hover:bg-[#f23645]/10 rounded-lg transition-colors">
             <LogOut size={18} /> Sign Out
           </button>
         </div>
