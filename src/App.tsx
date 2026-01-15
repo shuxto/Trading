@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react' // ✅ Removed useRef here
+import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 
 // COMPONENTS
@@ -17,6 +17,14 @@ import PremiumModal from './components/PremiumModal'
 import PositionsPanel from './components/PositionsPanel' 
 import { useMarketData } from './hooks/useMarketData' 
 import { type Order, type ActiveAsset, type ChartStyle, type TradingAccount } from './types'
+
+// ✅ DEFAULT ASSET FALLBACK
+const DEFAULT_ASSET: ActiveAsset = { 
+  symbol: 'BTC/USD', 
+  displaySymbol: 'BTC/USD', 
+  name: 'Bitcoin', 
+  source: 'twelve' 
+};
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -40,15 +48,24 @@ export default function App() {
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   
   const [lastOrderTime, setLastOrderTime] = useState<number>(0);
-  const [userBalance, setUserBalance] = useState(0); 
+  const [accountBalance, setAccountBalance] = useState(0); 
   
-  const [activeAsset, setActiveAsset] = useState<ActiveAsset>({ 
-    symbol: 'BTCUSDT', displaySymbol: 'BTC/USD', name: 'Bitcoin', source: 'binance' 
+  // ✅ PERSISTENT ASSET STATE
+  // 1. Initialize from LocalStorage
+  const [activeAsset, setActiveAsset] = useState<ActiveAsset>(() => {
+    const saved = localStorage.getItem('lastActiveAsset');
+    return saved ? JSON.parse(saved) : DEFAULT_ASSET;
   });
+
+  // 2. Save to LocalStorage whenever activeAsset changes
+  useEffect(() => {
+    localStorage.setItem('lastActiveAsset', JSON.stringify(activeAsset));
+  }, [activeAsset]);
+
   const [timeframe, setTimeframe] = useState('1m');
 
   const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(
-    activeAsset.symbol, timeframe, activeAsset.source
+    activeAsset.symbol, timeframe
   );
 
   // --- 1. AUTH & INITIALIZATION ---
@@ -56,7 +73,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
-        checkRole(session.user.id);
+        checkUser(session.user.id);
         checkUrlParams(session.user.id); 
       } else {
         setAuthLoading(false);
@@ -66,7 +83,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
-        checkRole(session.user.id);
+        checkUser(session.user.id);
       } else {
         setRole(null);
         setAuthLoading(false);
@@ -82,6 +99,7 @@ export default function App() {
     const accountId = params.get('account_id');
 
     if (mode === 'trading' && accountId) {
+       // Fetch Account Details INCLUDING Balance
        const { data } = await supabase
           .from('trading_accounts')
           .select('*')
@@ -91,16 +109,16 @@ export default function App() {
        
        if (data) {
           setActiveAccount(data);
+          setAccountBalance(data.balance || 0); 
           setCurrentView('trading');
        }
     }
   };
 
-  const checkRole = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('role, balance').eq('id', userId).single();
+  const checkUser = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
     if (data) {
       setRole(data.role as 'user' | 'admin');
-      setUserBalance(data.balance);
     }
     setAuthLoading(false);
   };
@@ -109,8 +127,19 @@ export default function App() {
   useEffect(() => {
     if (session && activeAccount) {
         fetchData();
+        refreshAccountBalance(); 
     }
   }, [session, activeAccount]);
+
+  const refreshAccountBalance = async () => {
+    if (!activeAccount) return;
+    const { data } = await supabase
+        .from('trading_accounts')
+        .select('balance')
+        .eq('id', activeAccount.id)
+        .single();
+    if (data) setAccountBalance(data.balance);
+  };
 
   const fetchData = async () => {
     if (!activeAccount) return;
@@ -173,80 +202,62 @@ export default function App() {
   const handleTrade = async (newOrder: Order) => {
     if (!activeAccount || !session?.user) return;
 
-    if (userBalance < newOrder.margin) {
-        alert("Insufficient Balance!");
+    if (accountBalance < newOrder.margin) {
+        alert("Insufficient Room Balance");
         return;
     }
 
-    const newBalance = userBalance - newOrder.margin;
-    setUserBalance(newBalance); 
-    setOrders([newOrder, ...orders]); 
-    setLastOrderTime(Date.now()); 
-
     try {
-        const { error: balanceError } = await supabase
-            .from('profiles')
-            .update({ balance: newBalance })
-            .eq('id', session.user.id);
+        const { data, error } = await supabase.functions.invoke('trade-engine', {
+            body: {
+                action: 'open',
+                payload: {
+                    symbol: newOrder.symbol,
+                    type: newOrder.type,
+                    size: newOrder.size,
+                    leverage: newOrder.leverage,
+                    account_id: activeAccount.id,
+                    stop_loss: newOrder.stopLoss,
+                    take_profit: newOrder.takeProfit
+                }
+            }
+        });
 
-        if (balanceError) throw balanceError;
+        if (error) throw error;
+        if (data.error) throw new Error(data.error);
 
-        const { error: tradeError } = await supabase
-            .from('trades')
-            .insert([{
-                user_id: session.user.id, 
-                account_id: activeAccount.id, 
-                symbol: newOrder.symbol, 
-                type: newOrder.type, 
-                entry_price: newOrder.entryPrice, 
-                size: newOrder.size, 
-                leverage: newOrder.leverage, 
-                status: 'open',
-                margin: newOrder.margin,
-                take_profit: newOrder.takeProfit,
-                stop_loss: newOrder.stopLoss,
-                liquidation_price: newOrder.liquidationPrice 
-            }]);
+        await fetchData(); 
+        await refreshAccountBalance(); 
+        setLastOrderTime(Date.now()); 
 
-        if (tradeError) throw tradeError;
-        fetchData(); 
-
-    } catch (err) {
+    } catch (err: any) {
         console.error("Trade failed:", err);
-        fetchData();
+        alert(`Order Failed: ${err.message || 'Unknown error'}`);
     }
   };
 
   const handleCloseOrder = async (orderId: number) => {
-    if (!currentPrice || !session?.user) return;
-
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    // --- OPTIMISTIC UI UPDATE ---
-    const quantity = order.size / order.entryPrice;
-    const estPnl = order.type === 'buy' ? (currentPrice - order.entryPrice) * quantity : (order.entryPrice - currentPrice) * quantity;
-    const estReturn = order.margin + estPnl;
-
-    setOrders(prev => prev.filter(o => o.id !== orderId)); 
-    setUserBalance(prev => prev + estReturn); 
-    setLastOrderTime(Date.now());
+    if (!session?.user) return;
 
     try {
-        // CALLING THE SECURE RPC FUNCTION
-        const { error } = await supabase.rpc('close_trade_position', { 
-           p_trade_id: orderId, 
-           p_exit_price: currentPrice 
+        const { data, error } = await supabase.functions.invoke('trade-engine', {
+            body: {
+                action: 'close',
+                payload: { trade_id: orderId }
+            }
         });
 
         if (error) throw error;
-        fetchData(); 
-        checkRole(session.user.id); 
+        if (data.error) throw new Error(data.error);
 
-    } catch (err) {
+        await fetchData(); 
+        await refreshAccountBalance(); 
+        
+        console.log(`Position Closed. Realized PnL: ${data.pnl?.toFixed(2)}`);
+
+    } catch (err: any) {
         console.error("Close failed:", err);
-        fetchData(); 
-        checkRole(session.user.id); 
+        alert(`Close Failed: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -257,7 +268,7 @@ export default function App() {
   if (role === 'admin') return <AdminPanel onLogout={() => supabase.auth.signOut()} />;
 
   if (currentView === 'portal') {
-    return <ClientDashboard userEmail={session.user.email} balance={userBalance} onLogout={() => supabase.auth.signOut()} />;
+    return <ClientDashboard userEmail={session.user.email} onLogout={() => supabase.auth.signOut()} />;
   }
 
   return (
@@ -268,7 +279,7 @@ export default function App() {
       
       <Header 
         activeAsset={activeAsset} 
-        balance={userBalance} 
+        balance={accountBalance} 
         activeAccountName={activeAccount?.name}
         onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
         onOpenDashboardPopup={() => {
@@ -305,13 +316,13 @@ export default function App() {
              activeAccountId={activeAccount?.id || 0}
           />
         </main>
-<OrderPanel 
-  currentPrice={currentPrice} 
-  activeSymbol={activeAsset.symbol} 
-  onTrade={handleTrade} 
-  activeAccountId={activeAccount?.id || 0} 
-  balance={userBalance} // ✅ Add this line to pass the real balance
-/>
+        <OrderPanel 
+          currentPrice={currentPrice} 
+          activeSymbol={activeAsset.symbol} 
+          onTrade={handleTrade} 
+          activeAccountId={activeAccount?.id || 0} 
+          balance={accountBalance} 
+        />
       </div>
       
       <PositionsPanel 

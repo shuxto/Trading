@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, ChevronUp, ChevronDown } from "lucide-react";
+import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; // ✅ Added Loader2
 import { useClickSound } from '../hooks/useClickSound';
 import type { Order } from '../types';
 
@@ -9,7 +9,7 @@ interface OrderPanelProps {
   activeSymbol: string;
   onTrade: (order: Order) => void;
   activeAccountId: number; 
-  balance: number; // ✅ Added real balance prop
+  balance: number; 
 }
 
 const MMR = 0.005; 
@@ -21,6 +21,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   const [leverage, setLeverage] = useState<number>(20);
   const [margin, setMargin] = useState<number>(100);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // ✅ Added Loading State
 
   const [tpEnabled, setTpEnabled] = useState(false);
   const [slEnabled, setSlEnabled] = useState(false);
@@ -70,7 +71,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     return diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
   };
 
-  const handleTrade = (side: 'buy' | 'sell') => {
+  const handleTrade = async (side: 'buy' | 'sell') => { // ✅ Made Async
     if (price <= 0) return;
     if (tpEnabled && tpPrice) {
       const tp = parseFloat(tpPrice);
@@ -84,6 +85,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     }
 
     playClick();
+    setIsProcessing(true); // ✅ Start Loading
 
     const newOrder: Order = {
       id: Date.now(),
@@ -100,12 +102,17 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       stopLoss: slEnabled && slPrice ? parseFloat(slPrice) : undefined,
     };
 
-    onTrade(newOrder);
+    try {
+        // ✅ Wait for the parent to finish the secure trade
+        await onTrade(newOrder);
+    } finally {
+        setIsProcessing(false); // ✅ Stop Loading
+    }
   };
 
   return (
     <aside 
-      style={{ backgroundColor: 'rgb(21, 26, 33)' }} // ✅ Back to your original color
+      style={{ backgroundColor: 'rgb(21, 26, 33)' }} 
       className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col 
       backdrop-blur-xl border-t md:border-t-0 md:border-l border-white/5 shadow-2xl
       transition-all duration-300 ease-in-out
@@ -147,7 +154,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Amount (USDT)</span>
             <div className="flex items-center gap-1 text-[10px] text-[#21ce99] font-bold">
               <Wallet size={10} />
-              <span>${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> {/* ✅ Real Balance Display */}
+              <span>${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
           <div className="bg-black/40 border border-white/10 rounded-xl flex items-center px-4 py-3 focus-within:border-[#F0B90B]/50 transition-all">
@@ -191,20 +198,34 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }} 
           whileTap={{ scale: 0.98 }}
           onClick={() => handleTrade('buy')}
-          className="bg-gradient-to-b from-[#21ce99] to-[#00b07c] text-[#0b0e11] py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.3)] border-b-4 border-[#17a075]"
+          disabled={isProcessing} // ✅ Disable while loading
+          className="bg-gradient-to-b from-[#21ce99] to-[#00b07c] text-[#0b0e11] py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.3)] border-b-4 border-[#17a075] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          <span className="text-sm font-black tracking-tighter uppercase">Buy</span>
-          <span className="text-[8px] font-black opacity-60 uppercase">Long</span>
+          {isProcessing ? ( // ✅ Show Loader
+             <Loader2 className="animate-spin" size={20} /> 
+          ) : (
+             <>
+               <span className="text-sm font-black tracking-tighter uppercase">Buy</span>
+               <span className="text-[8px] font-black opacity-60 uppercase">Long</span>
+             </>
+          )}
         </motion.button>
 
         <motion.button 
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }}
           whileTap={{ scale: 0.98 }}
           onClick={() => handleTrade('sell')}
-          className="bg-gradient-to-b from-[#f23645] to-[#c71d2b] text-white py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.3)] border-b-4 border-[#a61a26]"
+          disabled={isProcessing} // ✅ Disable while loading
+          className="bg-gradient-to-b from-[#f23645] to-[#c71d2b] text-white py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.3)] border-b-4 border-[#a61a26] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          <span className="text-sm font-black tracking-tighter uppercase">Sell</span>
-          <span className="text-[8px] font-black opacity-60 uppercase">Short</span>
+          {isProcessing ? ( // ✅ Show Loader
+             <Loader2 className="animate-spin" size={20} />
+          ) : (
+             <>
+               <span className="text-sm font-black tracking-tighter uppercase">Sell</span>
+               <span className="text-[8px] font-black opacity-60 uppercase">Short</span>
+             </>
+          )}
         </motion.button>
       </div>
     </aside>

@@ -4,21 +4,20 @@ import {
   ColorType, 
   AreaSeries, 
   CandlestickSeries, 
-  BarSeries,
-  LineSeries,
-  HistogramSeries,
-  BaselineSeries,
+  BarSeries, 
+  LineSeries, 
+  HistogramSeries, 
+  BaselineSeries, 
   type ISeriesApi, 
   type IChartApi, 
   CrosshairMode, 
-  type Time,
+  type Time, 
   type LineWidth 
 } from 'lightweight-charts';
-// REMOVED: import { useClock } from '../hooks/useClock';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
-import { Lock, Loader2, AlertTriangle, X, Check } from 'lucide-react'; // REMOVED: Clock
+import { Lock, Loader2, AlertTriangle, X, Check } from 'lucide-react';
 import type { Order, ChartStyle, CandleData } from '../types';
 
 interface ChartProps {
@@ -55,8 +54,11 @@ export default function Chart({
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
+  
+  // Track the active range to apply specific zoom logic
   const [activeRange, setActiveRange] = useState<string | null>(null);
-  // REMOVED: const currentTime = useClock();
+  // Store the number of bars to zoom into
+  const pendingZoomBars = useRef<number | null>(null);
 
   const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
     visible: false, x: 0, y: 0, price: 0
@@ -71,17 +73,23 @@ export default function Chart({
   const currentAnimatedPriceRef = useRef<number | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
+  // Zoom State Control
+  const isNewAsset = useRef(true);
+  const prevSymbol = useRef(symbol);
+
   // --- HANDLERS ---
   const handleTimeframeClick = (tf: typeof TIMEFRAMES[0]) => {
     if (tf.locked) { onTriggerPremium(); return; }
     onTimeframeChange(tf.value); 
     setActiveRange(null);
+    pendingZoomBars.current = null; // Clear manual zoom
   };
 
   const handleRangeClick = (range: typeof RANGES[0]) => {
     setActiveRange(range.label);
     onTimeframeChange(range.resolution); 
-    if (chartRef.current) chartRef.current.timeScale().fitContent();
+    // Set the specific number of bars to zoom into (e.g., 60 for 1H)
+    pendingZoomBars.current = range.bars;
   };
 
   const handleMenuAction = (action: string, _payload?: any) => {
@@ -149,10 +157,7 @@ export default function Chart({
       chart.subscribeClick(() => setMenuState(prev => ({ ...prev, visible: false })));
     }
 
-    // --- RECREATE MAIN SERIES BASED ON STYLE ---
     const chart = chartRef.current;
-    
-    // Clean up old series
     if (seriesRef.current) {
       chart.removeSeries(seriesRef.current);
       seriesRef.current = null;
@@ -162,10 +167,7 @@ export default function Chart({
       volumeSeriesRef.current = null;
     }
 
-    // 1. Create Main Series
     let newSeries: ISeriesApi<any>;
-
-    // Common options
     const lineOptions = { color: '#21ce99', lineWidth: 2 as LineWidth };
     
     switch (chartStyle) {
@@ -174,34 +176,28 @@ export default function Chart({
           upColor: '#21ce99', downColor: '#f23645', borderVisible: false, wickUpColor: '#21ce99', wickDownColor: '#f23645',
         });
         break;
-      
       case 'bars':
         newSeries = chart.addSeries(BarSeries, {
           upColor: '#21ce99', downColor: '#f23645', thinBars: false,
         });
         break;
-
       case 'line':
         newSeries = chart.addSeries(LineSeries, lineOptions);
         break;
-
       case 'area':
         newSeries = chart.addSeries(AreaSeries, {
           lineColor: '#ffffff', topColor: 'rgba(255, 255, 255, 0.1)', bottomColor: 'rgba(255, 255, 255, 0.0)', lineWidth: 2 as LineWidth,
         });
         break;
-
       case 'stepline':
         newSeries = chart.addSeries(LineSeries, { ...lineOptions, lineType: 1 } as any); 
         break;
-
       case 'baseline': 
         newSeries = chart.addSeries(BaselineSeries, {
           baseValue: { type: 'price', price: currentPrice || 0 },
           topLineColor: '#21ce99', bottomLineColor: '#f23645',
         });
         break;
-
       default:
         newSeries = chart.addSeries(CandlestickSeries, {
           upColor: '#21ce99', downColor: '#f23645', borderVisible: false, wickUpColor: '#21ce99', wickDownColor: '#f23645',
@@ -210,47 +206,43 @@ export default function Chart({
 
     seriesRef.current = newSeries;
 
-    // 2. Create Volume Series 
     if (chartStyle === 'candles' || chartStyle === 'bars') {
        const volSeries = chart.addSeries(HistogramSeries, {
          color: '#26a69a',
          priceFormat: { type: 'volume' },
          priceScaleId: '', 
        });
-       
-       volSeries.priceScale().applyOptions({
-         scaleMargins: { top: 0.8, bottom: 0 },
-       });
+       volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
        volumeSeriesRef.current = volSeries;
     }
 
-    // 3. Populate Data
     if (candles.length > 0) {
       if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
          newSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
       } else {
          newSeries.setData(candles);
       }
-
       if (volumeSeriesRef.current) {
          volumeSeriesRef.current.setData(candles.map(c => ({
-            time: c.time,
-            value: c.volume || 0,
-            color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
+           time: c.time,
+           value: c.volume || 0,
+           color: (c.close >= c.open) ? 'rgba(33, 206, 153, 0.4)' : 'rgba(242, 54, 69, 0.4)'
          })));
       }
     }
 
   }, [chartStyle]); 
 
-  // --- AUTO-FIT ON SYMBOL CHANGE ---
+  // Auto-fit on Symbol Change
   useEffect(() => {
-    if (chartRef.current) {
-      chartRef.current.timeScale().fitContent();
+    if (prevSymbol.current !== symbol) {
+        isNewAsset.current = true;
+        prevSymbol.current = symbol;
+        pendingZoomBars.current = 70; // Reset to default zoom on new symbol
     }
   }, [symbol]);
 
-  // Handle Crosshair Toggle
+  // Handle Crosshair
   useEffect(() => {
     if (chartRef.current) {
       const mode = activeTool ? CrosshairMode.Normal : CrosshairMode.Hidden;
@@ -264,10 +256,9 @@ export default function Chart({
     }
   }, [activeTool]);
 
-  // --- DATA UPDATE ---
+  // Data Update & Zoom Logic
   useEffect(() => {
     if (seriesRef.current) {
-      
       if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
          (seriesRef.current as ISeriesApi<"Line">).setData(candles.map(c => ({ time: c.time, value: c.close })));
       } else {
@@ -282,7 +273,27 @@ export default function Chart({
          })));
       }
 
-      // Only animate if we actually have data
+      // ✅ SMART ZOOM: Only zoom if it's a new asset or pending zoom exists
+      if ((isNewAsset.current || pendingZoomBars.current) && chartRef.current && candles.length > 0) {
+          const totalBars = candles.length;
+          
+          // Use specific bars for ranges (e.g. 60 for 1H), or default to 70 for new assets
+          const visibleBars = pendingZoomBars.current || 70; 
+
+          if (totalBars > visibleBars) {
+              chartRef.current.timeScale().setVisibleLogicalRange({
+                  from: totalBars - visibleBars,
+                  to: totalBars + 5 // Small padding to right
+              });
+          } else {
+              chartRef.current.timeScale().fitContent();
+          }
+          
+          // Clear flags
+          isNewAsset.current = false;
+          pendingZoomBars.current = null;
+      }
+
       if (candles.length > 0) {
         const lastPrice = candles[candles.length - 1].close;
         currentAnimatedPriceRef.current = lastPrice;
@@ -290,7 +301,7 @@ export default function Chart({
     }
   }, [candles, chartStyle]);
 
-  // --- ANIMATION ---
+  // Animation
   useEffect(() => {
     let frameId: number;
     const animate = () => {
@@ -333,8 +344,8 @@ export default function Chart({
     <div className="w-full h-full relative group bg-transparent overflow-hidden">
       <style>{`#tv-attr-logo, .tv-lightweight-charts-attribution { display: none !important; }`}</style>
 
-      {/* TIMEFRAMES */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex gap-1 bg-[#151a21]/90 backdrop-blur-md p-1 rounded-lg border border-[#2a2e39] shadow-xl">
+      {/* TIMEFRAMES (Hidden on Mobile) */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 hidden md:flex gap-1 bg-[#151a21]/90 backdrop-blur-md p-1 rounded-lg border border-[#2a2e39] shadow-xl">
         {TIMEFRAMES.map((tf) => (
             <button 
               key={tf.label} 
@@ -398,8 +409,8 @@ export default function Chart({
         </div>
       )}
 
-      {/* RANGES */}
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex gap-2 bg-[#0b0e11]/80 backdrop-blur-sm p-1.5 rounded-full border border-[#2a2e39] opacity-50 hover:opacity-100 transition-opacity">
+      {/* RANGES (Hidden on Mobile + Moved to bottom-2) */}
+      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-30 hidden md:flex gap-2 bg-[#0b0e11]/80 backdrop-blur-sm p-1.5 rounded-full border border-[#2a2e39] opacity-50 hover:opacity-100 transition-opacity">
         {RANGES.map((r) => (
             <button key={r.label} onClick={() => handleRangeClick(r)} className={`text-[9px] font-bold px-3 py-1 rounded-full transition-all ${activeRange === r.label ? 'bg-[#21ce99] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}>
                 {r.label}
@@ -421,7 +432,7 @@ export default function Chart({
         onCloseOrder={onCloseOrder}
       />
       
-      {/* Pulsing Dot (Area Only) */}
+      {/* Pulsing Dot */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}></div>
 
       {menuState.visible && (

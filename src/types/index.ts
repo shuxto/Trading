@@ -31,14 +31,15 @@ export interface Order {
   leverage: number;
   size: number;
   liquidationPrice: number;
-  status: 'active' | 'closed' | 'open'; // ✅ ADDED 'open' to match DB
+  status: 'active' | 'closed' | 'open'; 
   pnl?: number; 
   takeProfit?: number; 
   stopLoss?: number;   
   
-  // ✅ NEW: Added these so History Tab works
+  // History fields
   exitPrice?: number;
   closedAt?: string;
+  created_at?: string; // Added optional created_at for sorting if needed
 }
 
 export interface Asset {
@@ -76,6 +77,7 @@ export interface TradingAccount {
   id: number;
   user_id: string;
   name: string;
+  balance: number; // ✅ FIXED: Added this field
   created_at: string;
 }
 

@@ -12,22 +12,24 @@ import {
   Menu,
   X,
   Lock,
-  Loader2 // <--- IMPORT THIS
+  Loader2 
 } from 'lucide-react';
+
 import OverviewTab from './OverviewTab';
 import BankingTab from './BankingTab';
+import AccountsTab from './AccountsTab';
 import HistoryTab from './HistoryTab';
 import VerificationTab from './VerificationTab';
 import SettingsTab from './SettingsTab';
-import AccountsTab from './AccountsTab';
 
 interface Props {
   userEmail: string;
-  balance: number;
+  // balance: number; // ❌ REMOVED (Not needed anymore)
   onLogout: () => void;
 }
 
-export default function ClientDashboard({ userEmail, balance, onLogout }: Props) {
+// ❌ REMOVED 'balance' from here too
+export default function ClientDashboard({ userEmail, onLogout }: Props) {
   const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'banking' | 'history' | 'kyc' | 'settings'>('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -74,8 +76,8 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
   const renderContent = () => {
     switch (activeTab) {
       case 'overview': return <OverviewTab onNavigateToPlatform={() => handleTabChange('accounts', true)} />;
-      case 'accounts': return <AccountsTab globalBalance={balance} />;
-      case 'banking': return <BankingTab currentBalance={balance} />;
+      case 'accounts': return <AccountsTab />;
+      case 'banking': return <BankingTab />;
       case 'history': return <HistoryTab />;
       case 'kyc': return <VerificationTab />;
       case 'settings': return <SettingsTab userEmail={userEmail} />;
@@ -83,7 +85,6 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
     }
   };
 
-  // ✅ USE THE LOADING STATE (Fixes the error)
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b0e11] flex items-center justify-center text-[#21ce99]">
@@ -93,11 +94,11 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0e11] text-white font-sans flex">
+    <div className="min-h-screen bg-[#0b0e11] text-white font-sans flex overflow-hidden"> 
       {/* SIDEBAR */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-[#151a21] border-r border-[#2a2e39] transform transition-transform duration-300 ease-in-out
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col
       `}>
         <div className="p-6 border-b border-[#2a2e39] flex items-center justify-between">
           <h1 className="text-xl font-bold bg-gradient-to-r from-[#21ce99] to-[#21ce99]/60 bg-clip-text text-transparent">
@@ -120,7 +121,7 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
             </div>
         </div>
 
-        <nav className="p-4 space-y-2">
+        <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map((item) => {
             const isItemLocked = item.locked && kycStatus !== 'verified';
             return (
@@ -143,7 +144,7 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
           })}
         </nav>
 
-        <div className="absolute bottom-0 w-full p-4 border-t border-[#2a2e39] bg-[#151a21]">
+        <div className="p-4 border-t border-[#2a2e39] bg-[#151a21]">
           <button 
             onClick={() => handleTabChange('accounts', true)}
             disabled={kycStatus !== 'verified'}
@@ -163,8 +164,8 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden h-16 bg-[#151a21] border-b border-[#2a2e39] flex items-center justify-between px-4">
+      <main className="flex-1 flex flex-col min-w-0 h-screen">
+        <header className="md:hidden h-16 bg-[#151a21] border-b border-[#2a2e39] flex items-center justify-between px-4 flex-shrink-0">
           <button onClick={() => setIsMobileMenuOpen(true)} className="text-[#8b9bb4]">
             <Menu size={24} />
           </button>
@@ -172,9 +173,10 @@ export default function ClientDashboard({ userEmail, balance, onLogout }: Props)
           <div className="w-6" /> 
         </header>
 
+        {/* SCROLLING CONTAINER */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-6xl mx-auto">
-             {renderContent()}
+          <div className="max-w-6xl mx-auto pb-10">
+              {renderContent()}
           </div>
         </div>
       </main>

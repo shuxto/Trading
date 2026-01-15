@@ -253,18 +253,18 @@ export default function Sidebar({
         className="fixed z-[9999] bg-[#1e222d] border border-[#2a2e39] rounded-lg shadow-xl p-1 min-w-[160px] flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 sidebar-menu-item"
         style={{ top: menuPosition.top, left: menuPosition.left }}
       >
-         {group.items.map((item: any) => (
-           <button
-             key={item.id}
-             onClick={() => handleSubItemClick(item)}
-             className={`flex items-center gap-3 px-3 py-2 text-xs rounded hover:bg-[#2a303c] w-full text-left font-medium
-               ${activeTool === item.id ? 'text-[#21ce99] bg-[#21ce99]/10' : 'text-[#8b9bb4] text-gray-300'}
-             `}
-           >
-             {item.icon}
-             <span>{item.label}</span>
-           </button>
-         ))}
+          {group.items.map((item: any) => (
+            <button
+              key={item.id}
+              onClick={() => handleSubItemClick(item)}
+              className={`flex items-center gap-3 px-3 py-2 text-xs rounded hover:bg-[#2a303c] w-full text-left font-medium
+                ${activeTool === item.id ? 'text-[#21ce99] bg-[#21ce99]/10' : 'text-[#8b9bb4]'}
+              `}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
       </div>
     );
   };
