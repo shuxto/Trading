@@ -37,7 +37,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     description: '',
     type: 'warning' as 'warning' | 'success' | 'danger',
     onConfirm: undefined as (() => void) | undefined,
-    confirmText: 'Confirm'
+    confirmText: 'Confirm',
+    isLoading: false // ✅ ADDED LOADING STATE
   });
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
-  // HELPER: Open Confirmation Modal
+  // ✅ HELPER: Open Confirmation Modal WITH ERROR HANDLING
   const confirmAction = (title: string, desc: string, type: 'warning' | 'danger' | 'success', action: () => Promise<void>) => {
     setModal({
       isOpen: true,
@@ -68,22 +69,44 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       description: desc,
       type,
       confirmText: 'Confirm',
+      isLoading: false,
       onConfirm: async () => {
-         await action();
-         setModal({ 
-            isOpen: true, 
-            title: 'Success', 
-            description: 'Operation completed successfully.', 
-            type: 'success', 
-            confirmText: 'Awesome',
-            onConfirm: undefined 
-         });
-         fetchData();
+         // 1. START LOADING
+         setModal(prev => ({ ...prev, isLoading: true }));
+         
+         try {
+           // 2. TRY THE ACTION
+           await action();
+           
+           // 3. IF SUCCESSFUL
+           setModal({ 
+              isOpen: true, 
+              title: 'Success', 
+              description: 'Operation completed successfully.', 
+              type: 'success', 
+              confirmText: 'Awesome',
+              isLoading: false,
+              onConfirm: undefined 
+           });
+           fetchData(); // Refresh list
+         } catch (error: any) {
+           // 4. IF FAILED (Catch the error so the button doesn't freeze!)
+           console.error("Admin Action Failed:", error);
+           setModal({ 
+              isOpen: true, 
+              title: 'Error', 
+              description: error.message || 'Action failed. Check database policies.', 
+              type: 'danger', 
+              confirmText: 'Close',
+              isLoading: false,
+              onConfirm: undefined 
+           });
+         }
       }
     });
   };
 
- // ✅ 1. THE NUCLEAR LOGOUT FUNCTION (Now uses onLogout to fix error)
+  // LOGOUT HANDLER
   const handleLogoutClick = () => {
     setModal({
       isOpen: true,
@@ -91,22 +114,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       description: "Are you sure you want to log out?",
       type: "warning",
       confirmText: "Sign Out",
+      isLoading: false,
       onConfirm: async () => {
-        // Close modal first
-        setModal(prev => ({ ...prev, isOpen: false }));
-        
         try {
-          // 1. Tell parent we are logging out (Fixes the TypeScript error)
+          setModal(prev => ({ ...prev, isOpen: false }));
           onLogout();
-
-          // 2. Tell Supabase to kill session
           await supabase.auth.signOut();
-          
-          // 3. FORCE KILL LOCAL STORAGE
           localStorage.clear(); 
           sessionStorage.clear();
-
-          // 4. Force Reload Page
           window.location.href = "/";
         } catch (error) {
            console.error("Logout error", error);
@@ -119,51 +134,31 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   // --- ACTIONS ---
 
   const handleApproveDeposit = (txnId: number) => {
-    confirmAction(
-      "Approve Deposit?", 
-      "This will add funds to the user's balance immediately. Are you sure?", 
-      "success",
-      async () => {
+    confirmAction("Approve Deposit?", "This will add funds to the user's balance immediately.", "success", async () => {
         const { error } = await supabase.rpc('approve_deposit', { txn_id: txnId });
         if (error) throw error;
-      }
-    );
+    });
   };
 
   const handleRejectDeposit = (txnId: number) => {
-    confirmAction(
-      "Reject Transaction?", 
-      "This will mark the transaction as rejected. The user will not receive funds.", 
-      "danger",
-      async () => {
+    confirmAction("Reject Transaction?", "This will mark the transaction as rejected.", "danger", async () => {
         const { error } = await supabase.from('transactions').update({ status: 'rejected' }).eq('id', txnId);
         if (error) throw error;
-      }
-    );
+    });
   };
 
   const handleVerifyUser = (userId: string) => {
-    confirmAction(
-      "Verify User Identity?", 
-      "This user will be granted full access to trading and banking features.", 
-      "success",
-      async () => {
+    confirmAction("Verify User Identity?", "This user will be granted full access.", "success", async () => {
         const { error } = await supabase.from('profiles').update({ kyc_status: 'verified' }).eq('id', userId);
         if (error) throw error;
-      }
-    );
+    });
   };
 
   const handleRejectUser = (userId: string) => {
-    confirmAction(
-      "Reject User Verification?", 
-      "This will mark the user's KYC as rejected. They will remain locked out of key features.", 
-      "danger",
-      async () => {
+    confirmAction("Reject User Verification?", "This will mark the user's KYC as rejected.", "danger", async () => {
         const { error } = await supabase.from('profiles').update({ kyc_status: 'rejected' }).eq('id', userId);
         if (error) throw error;
-      }
-    );
+    });
   };
 
   const renderContent = () => {
@@ -178,7 +173,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   return (
     <div className="min-h-screen bg-[#0b0e11] text-white font-sans flex">
-      
       <GlassModal 
         isOpen={modal.isOpen}
         onClose={() => setModal({ ...modal, isOpen: false })}
@@ -187,13 +181,10 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         description={modal.description}
         type={modal.type}
         confirmText={modal.confirmText}
+        isLoading={modal.isLoading} // ✅ Pass loading state
       />
 
-      {/* SIDEBAR */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-[#151a21] border-r border-[#2a2e39] transform transition-transform duration-300 ease-in-out
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0
-      `}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#151a21] border-r border-[#2a2e39] transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
         <div className="p-6 border-b border-[#2a2e39] flex justify-between items-center">
           <div>
              <h1 className="text-xl font-black text-[#F0B90B] tracking-wider">ADMIN<span className="text-white">PANEL</span></h1>
@@ -201,33 +192,17 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           </div>
           <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-gray-500"><X size={24}/></button>
         </div>
-
         <nav className="flex-1 p-4 space-y-2">
-          {/* ... (Nav buttons remain the same) ... */}
-          <button onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
-            <LayoutDashboard size={20} /> Overview
-          </button>
-          <button onClick={() => { setActiveTab('deposits'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'deposits' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
-            <Wallet size={20} /> Deposits
-            {stats.pendingDeposits > 0 && <span className="ml-auto bg-[#f23645] text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">{stats.pendingDeposits}</span>}
-          </button>
-          <button onClick={() => { setActiveTab('verification'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'verification' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
-            <ShieldCheck size={20} /> Verify Accounts
-          </button>
-          <button onClick={() => { setActiveTab('users'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'users' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
-            <Users size={20} /> Users
-          </button>
+          <button onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}><LayoutDashboard size={20} /> Overview</button>
+          <button onClick={() => { setActiveTab('deposits'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'deposits' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}><Wallet size={20} /> Deposits {stats.pendingDeposits > 0 && <span className="ml-auto bg-[#f23645] text-white text-[10px] px-2 py-0.5 rounded-full animate-pulse">{stats.pendingDeposits}</span>}</button>
+          <button onClick={() => { setActiveTab('verification'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'verification' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}><ShieldCheck size={20} /> Verify Accounts</button>
+          <button onClick={() => { setActiveTab('users'); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'users' ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}><Users size={20} /> Users</button>
         </nav>
-
         <div className="p-4 border-t border-[#2a2e39]">
-          {/* ✅ 2. CONNECTED THE NEW HANDLER HERE */}
-          <button onClick={handleLogoutClick} className="w-full flex items-center gap-2 text-[#f23645] px-4 py-2 hover:bg-[#f23645]/10 rounded-lg transition-colors">
-            <LogOut size={18} /> Sign Out
-          </button>
+          <button onClick={handleLogoutClick} className="w-full flex items-center gap-2 text-[#f23645] px-4 py-2 hover:bg-[#f23645]/10 rounded-lg transition-colors"><LogOut size={18} /> Sign Out</button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-[#151a21] md:bg-transparent border-b border-[#2a2e39] md:border-none flex items-center justify-between px-4 md:px-8 md:pt-8 md:mb-4">
            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden text-gray-500"><Menu size={24}/></button>
@@ -237,10 +212,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
              <span className="text-xs text-[#8b9bb4]">Super Admin Access Active</span>
            </div>
         </header>
-
-        <div className="flex-1 overflow-y-auto p-4 md:px-8 md:pb-8">
-           {renderContent()}
-        </div>
+        <div className="flex-1 overflow-y-auto p-4 md:px-8 md:pb-8">{renderContent()}</div>
       </main>
     </div>
   );
