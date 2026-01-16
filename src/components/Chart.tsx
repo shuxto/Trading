@@ -17,7 +17,7 @@ import {
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
 import ChartOverlay from './ChartOverlay';
-import { Lock, Loader2, AlertTriangle, X, Check } from 'lucide-react';
+import { Lock, Loader2, AlertTriangle, X, Check, BarChart3 } from 'lucide-react';
 import type { Order, ChartStyle, CandleData } from '../types';
 
 interface ChartProps {
@@ -108,6 +108,8 @@ export default function Chart({
   const executeTrade = () => {
     if (!confirmAction) return;
     const { type, price } = confirmAction;
+    
+    // ✅ CHANGED: LEVERAGE 1x (SPOT MODE)
     const newOrder: Order = {
       id: Date.now(),
       account_id: activeAccountId, 
@@ -115,9 +117,9 @@ export default function Chart({
       symbol: displaySymbol,
       entryPrice: price,
       margin: 100,
-      leverage: 20,
-      size: 2000,
-      liquidationPrice: price * (type === 'buy' ? 0.95 : 1.05),
+      leverage: 1, // <--- WAS 20
+      size: 100,   // <--- WAS 2000 (Matched to 1x leverage)
+      liquidationPrice: 0, // Spot has no liquidation price (technically 0)
       status: 'active'
     };
     onTrade(newOrder);
@@ -340,6 +342,28 @@ export default function Chart({
     return () => cancelAnimationFrame(frameId);
   }, [currentPrice, lastCandleTime, chartStyle]);
 
+  // ✅ NEW: WELCOME SCREEN (If no symbol is selected)
+  if (!symbol) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#151a21] relative z-20 animate-in fade-in">
+         <div className="text-center space-y-6 p-10 bg-[#1e232d]/50 backdrop-blur-xl rounded-3xl border border-[#2a2e39] shadow-2xl max-w-md mx-4">
+            <div className="w-20 h-20 bg-[#21ce99]/10 rounded-full flex items-center justify-center mx-auto text-[#21ce99] shadow-[0_0_30px_rgba(33,206,153,0.2)] border border-[#21ce99]/20">
+                <BarChart3 size={40} />
+            </div>
+            <div className="space-y-2">
+                <h2 className="text-2xl font-black text-white tracking-tight">Trading Terminal <span className="text-[#21ce99]">Standby</span></h2>
+                <p className="text-[#8b9bb4] text-sm leading-relaxed">
+                  The terminal is ready. Select a financial instrument from the menu above to initialize the data feed and begin your analysis.
+                </p>
+            </div>
+            <div className="pt-4">
+                <span className="text-[10px] uppercase font-bold text-[#5e6673] tracking-widest">Waiting for input...</span>
+            </div>
+         </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full relative group bg-transparent overflow-hidden">
       <style>{`#tv-attr-logo, .tv-lightweight-charts-attribution { display: none !important; }`}</style>
@@ -388,6 +412,7 @@ export default function Chart({
                     </span>
                     at <span className="text-white font-mono">${confirmAction.price.toFixed(2)}</span>?
                  </p>
+                 <p className="text-[10px] text-[#5e6673] mt-2 font-mono bg-black/30 rounded px-2 py-1 inline-block">1x Leverage (Spot)</p>
               </div>
               <div className="flex w-full gap-3 mt-2">
                  <button 

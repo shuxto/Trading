@@ -1,22 +1,21 @@
 import { useEffect, useState, useRef } from 'react';
 import { type Time } from 'lightweight-charts';
-import type { CandleData } from '../types';
+import type { CandleData, ActiveAsset } from '../types';
 
 // ✅ API Key
 const TWELVE_DATA_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
 
-// ✅ CHANGED: Removed 'source' from arguments
-export function useMarketData(symbol: string, interval: string) {
+export function useMarketData(asset: ActiveAsset, interval: string) {
   const [candles, setCandles] = useState<CandleData[]>([]);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [lastCandleTime, setLastCandleTime] = useState<Time | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  const symbolRef = useRef(symbol);
+  const assetRef = useRef(asset);
   const intervalRef = useRef(interval);
 
   useEffect(() => {
-    symbolRef.current = symbol;
+    assetRef.current = asset;
     intervalRef.current = interval;
     
     setCandles([]); 
@@ -41,17 +40,45 @@ export function useMarketData(symbol: string, interval: string) {
         
         const tdInterval = intervalMap[interval] || '1day';
         
-        // Fetch 5000 candles for deep history
-        const res = await fetch(`https://api.twelvedata.com/time_series?symbol=${symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`);
-        const data = await res.json();
+        // Base URL
+        const baseUrl = `https://api.twelvedata.com/time_series?symbol=${asset.symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`;
 
-        if (data.values && Array.isArray(data.values) && symbolRef.current === symbol) {
+        // Check if Crypto (by type or symbol)
+        // We cast to 'any' because 'type' might be missing on the initial load default asset
+        const isCrypto = (asset as any).type === 'crypto' || 
+                         (asset.symbol.includes('/') && !asset.symbol.includes('USD') && !asset.symbol.includes('EUR'));
+
+        let data;
+
+        if (isCrypto) {
+            // 🛑 TRY 1: Attempt to fetch from BINANCE to get VOLUME
+            try {
+                const res = await fetch(`${baseUrl}&exchange=binance`);
+                data = await res.json();
+            } catch (e) {
+                data = { code: 400 }; // Force fallback on network error
+            }
+
+            // 🛑 TRY 2: If Binance failed (no values), Fallback to COMPOSITE (No Volume, but working Price)
+            if (!data.values) {
+                console.warn("Binance data missing, falling back to Composite feed...");
+                const res = await fetch(baseUrl);
+                data = await res.json();
+            }
+        } else {
+            // Standard fetch for Stocks/Forex
+            const res = await fetch(baseUrl);
+            data = await res.json();
+        }
+
+        if (data.values && Array.isArray(data.values) && assetRef.current.symbol === asset.symbol) {
           const formatted: CandleData[] = data.values.reverse().map((d: any) => ({
             time: (new Date(d.datetime).getTime() / 1000) as Time,
             open: parseFloat(d.open),
             high: parseFloat(d.high),
             low: parseFloat(d.low),
             close: parseFloat(d.close),
+            // Use 0 if volume is missing (Composite feed)
             volume: parseFloat(d.volume || '0')
           }));
           
@@ -76,10 +103,10 @@ export function useMarketData(symbol: string, interval: string) {
     const ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${TWELVE_DATA_API_KEY}`);
 
     ws.onopen = () => {
-      if (symbolRef.current === symbol) {
+      if (assetRef.current.symbol === asset.symbol) {
           ws.send(JSON.stringify({
               action: "subscribe",
-              params: { symbols: symbol }
+              params: { symbols: asset.symbol }
           }));
       }
     };
@@ -87,7 +114,7 @@ export function useMarketData(symbol: string, interval: string) {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.event === 'price' && data.symbol === symbol && symbolRef.current === symbol) {
+        if (data.event === 'price' && data.symbol === asset.symbol && assetRef.current.symbol === asset.symbol) {
             const price = parseFloat(data.price);
             setCurrentPrice(price);
             
@@ -110,7 +137,7 @@ export function useMarketData(symbol: string, interval: string) {
 
     return () => ws.close();
 
-  }, [symbol, interval]);
+  }, [asset, interval]);
 
   return { candles, currentPrice, lastCandleTime, isLoading };
 }

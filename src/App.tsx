@@ -18,12 +18,13 @@ import PositionsPanel from './components/PositionsPanel'
 import { useMarketData } from './hooks/useMarketData' 
 import { type Order, type ActiveAsset, type ChartStyle, type TradingAccount } from './types'
 
-// ✅ DEFAULT ASSET FALLBACK
-const DEFAULT_ASSET: ActiveAsset = { 
+// ✅ DEFAULT ASSET FALLBACK (Now with type!)
+const DEFAULT_ASSET: ActiveAsset & { type: string } = { 
   symbol: 'BTC/USD', 
   displaySymbol: 'BTC/USD', 
   name: 'Bitcoin', 
-  source: 'twelve' 
+  source: 'twelve',
+  type: 'crypto'
 };
 
 export default function App() {
@@ -64,9 +65,8 @@ export default function App() {
 
   const [timeframe, setTimeframe] = useState('1m');
 
-  const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(
-    activeAsset.symbol, timeframe
-  );
+  // ✅ FIXED: No more syntax error here
+  const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(activeAsset, timeframe);
 
   // --- 1. AUTH & INITIALIZATION ---
   useEffect(() => {
