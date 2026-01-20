@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"; // ✅ Added useCallback
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; 
 import { useClickSound } from '../hooks/useClickSound';
@@ -41,10 +41,26 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     ? (price * (1 + (1 / effectiveLeverage))) / (1 + MMR)
     : 0;
 
+  // ✅ THE DIRECTIONAL OBSERVER: Forces inputs to flip logic
+  const forceDirectionUpdate = (side: 'buy' | 'sell') => {
+    if (price <= 0) return;
+    
+    // Calculate 5% offsets based on the target side
+    const suggestedTp = side === 'buy' ? price * 1.05 : price * 0.95;
+    const suggestedSl = side === 'buy' ? price * 0.95 : price * 1.05;
+
+    // We only update the state if the user HAS NOT typed something manual 
+    // or if the current value is invalid for the side they just clicked.
+    setTpPrice(suggestedTp.toFixed(2));
+    setSlPrice(suggestedSl.toFixed(2));
+  };
+
+  // Standard ghost prices for initialization
   useEffect(() => {
-    if (tpEnabled && !tpPrice && price > 0) setTpPrice((price * 1.05).toFixed(2));
-    if (slEnabled && !slPrice && price > 0) setSlPrice((price * 0.95).toFixed(2));
-  }, [tpEnabled, slEnabled, price]);
+    if (price > 0 && !tpPrice && !slPrice) {
+      forceDirectionUpdate('buy'); 
+    }
+  }, [price]);
 
   useEffect(() => {
     if (tradingMode === 'spot') {
@@ -71,42 +87,30 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     return diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
   };
 
-  // ✅ WRAPPED IN useCallback SO IT CAN BE CALLED BY THE EVENT LISTENER
   const handleTrade = useCallback(async (side: 'buy' | 'sell') => { 
     if (price <= 0) return;
 
-    // VALIDATION FOR FUTURES (Manual TP/SL)
+    // Use current input values if enabled, otherwise calculate default
+    let finalTp = tpEnabled && tpPrice ? parseFloat(tpPrice) : (side === 'buy' ? price * 1.05 : price * 0.95);
+    let finalSl = slEnabled && slPrice ? parseFloat(slPrice) : (side === 'buy' ? price * 0.95 : price * 1.05);
+
     if (tradingMode === 'futures') {
-        if (tpEnabled && tpPrice) {
-            const tp = parseFloat(tpPrice);
-            if (side === 'buy' && tp <= price) { alert("⚠️ TP must be HIGHER than price."); return; }
-            if (side === 'sell' && tp >= price) { alert("⚠️ TP must be LOWER than price."); return; }
-        }
-        if (slEnabled && slPrice) {
-            const sl = parseFloat(slPrice);
-            if (side === 'buy' && sl >= price) { alert("⚠️ SL must be LOWER than price."); return; }
-            if (side === 'sell' && sl <= price) { alert("⚠️ SL must be HIGHER than price."); return; }
+        if (side === 'buy') {
+            if (finalTp <= price) { alert("⚠️ Long TP must be HIGHER than entry."); return; }
+            if (finalSl >= price) { alert("⚠️ Long SL must be LOWER than entry."); return; }
+        } else {
+            // SHORT DIRECTION: TP must be LOWER, SL must be HIGHER
+            if (finalTp >= price) { alert("⚠️ Short TP must be LOWER than entry."); return; }
+            if (finalSl <= price) { alert("⚠️ Short SL must be HIGHER than entry."); return; }
         }
     }
 
     playClick();
     setIsProcessing(true); 
 
-    // ✅ PRO LOGIC: CALCULATE TP/SL
-    let finalTp: number | undefined;
-    let finalSl: number | undefined;
-
     if (tradingMode === 'spot') {
-        if (side === 'buy') {
-            finalTp = price * 1.20; 
-            finalSl = price * 0.90; 
-        } else {
-            finalTp = price * 0.80;
-            finalSl = price * 1.10;
-        }
-    } else {
-        finalTp = tpEnabled && tpPrice ? parseFloat(tpPrice) : undefined;
-        finalSl = slEnabled && slPrice ? parseFloat(slPrice) : undefined;
+        finalTp = side === 'buy' ? price * 1.20 : price * 0.80;
+        finalSl = side === 'buy' ? price * 0.90 : price * 1.10;
     }
 
     const newOrder: Order = {
@@ -131,15 +135,12 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     }
   }, [price, tradingMode, tpEnabled, tpPrice, slEnabled, slPrice, activeAccountId, activeSymbol, margin, effectiveLeverage, buyingPower, liqPriceLong, liqPriceShort, onTrade, playClick]);
 
-  // ✅ NEW: LISTEN FOR CHART SIGNALS
   useEffect(() => {
     const handleRemoteTrade = (e: CustomEvent) => {
         if (e.detail && (e.detail.side === 'buy' || e.detail.side === 'sell')) {
-            console.log("📡 OrderPanel received signal:", e.detail.side);
             handleTrade(e.detail.side);
         }
     };
-
     window.addEventListener('trigger-trade' as any, handleRemoteTrade as any);
     return () => window.removeEventListener('trigger-trade' as any, handleRemoteTrade as any);
   }, [handleTrade]);
@@ -147,11 +148,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   return (
     <aside 
       style={{ backgroundColor: 'rgb(21, 26, 33)' }} 
-      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col 
-      backdrop-blur-xl border-t md:border-t-0 md:border-l border-white/5 shadow-2xl
-      transition-all duration-300 ease-in-out
-      ${isMobileExpanded ? 'h-[520px]' : 'h-auto'} 
-      md:static md:w-[260px] md:h-full`}>
+      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col backdrop-blur-xl border-t md:border-t-0 md:border-l border-white/5 shadow-2xl transition-all duration-300 ease-in-out ${isMobileExpanded ? 'h-[520px]' : 'h-auto'} md:static md:w-[260px] md:h-full`}>
       
       <div className="flex md:hidden items-center justify-center py-2 cursor-pointer" onClick={() => setIsMobileExpanded(!isMobileExpanded)}>
         <div className="w-12 h-1 bg-gray-600 rounded-full"></div>
@@ -159,7 +156,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       </div>
 
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5 ${isMobileExpanded ? 'block' : 'hidden'} md:block`}>
-        {/* TAB SWITCHER */}
+        {/* TABS */}
         <div className="flex p-1 bg-black/40 rounded-xl border border-white/5">
           <button onClick={() => { playClick(); setTradingMode('spot'); }} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all relative z-10 ${tradingMode === 'spot' ? 'text-white' : 'text-gray-500'}`}>
             SPOT {tradingMode === 'spot' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#2a2e39] rounded-lg -z-10 border border-white/10" />}
@@ -169,7 +166,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           </button>
         </div>
 
-        {/* LEVERAGE SLIDER */}
+        {/* LEVERAGE */}
         <AnimatePresence>
           {tradingMode === 'futures' ? (
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="bg-white/5 rounded-xl p-3 border border-white/5">
@@ -187,7 +184,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           )}
         </AnimatePresence>
 
-        {/* MARGIN INPUT */}
+        {/* MARGIN */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
             <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Amount (USDT)</span>
@@ -202,50 +199,67 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           </div>
         </div>
 
-        {/* TP / SL SECTION */}
+        {/* TP/SL SECTION */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 bg-white/[0.02] p-3 rounded-xl border border-white/5">
               <div className="space-y-2">
-                <div className="flex justify-between"><div className="flex gap-2 items-center"><input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} className="accent-[#21ce99]" /><span className="text-[9px] font-bold text-gray-400">TAKE PROFIT</span></div>{tpEnabled && <span className="text-[9px] font-mono text-[#21ce99]">{getDiff(tpPrice)}%</span>}</div>
-                {tpEnabled && <input type="number" value={tpPrice} onChange={(e) => setTpPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#21ce99] font-bold text-xs p-2 rounded border border-white/10 outline-none" />}
+                <div className="flex justify-between">
+                   <div className="flex gap-2 items-center">
+                      <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} className="accent-[#21ce99]" />
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight">Take Profit</span>
+                   </div>
+                   <span className={`text-[9px] font-mono ${tpEnabled ? 'text-[#21ce99]' : 'text-gray-600 opacity-50'}`}>{getDiff(tpPrice)}%</span>
+                </div>
+                <div className={`relative transition-opacity ${!tpEnabled && 'opacity-40'}`}>
+                   <input type="number" disabled={!tpEnabled} value={tpPrice} onChange={(e) => setTpPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#21ce99] font-bold text-xs p-2 rounded border border-white/10 outline-none" />
+                   {!tpEnabled && <div className="absolute inset-0 flex items-center pl-2 text-[8px] text-gray-500 font-bold uppercase pointer-events-none">Auto Protect</div>}
+                </div>
               </div>
               <div className="space-y-2">
-                <div className="flex justify-between"><div className="flex gap-2 items-center"><input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)} className="accent-[#f23645]" /><span className="text-[9px] font-bold text-gray-400">STOP LOSS</span></div>{slEnabled && <span className="text-[9px] font-mono text-[#f23645]">{getDiff(slPrice)}%</span>}</div>
-                {slEnabled && <input type="number" value={slPrice} onChange={(e) => setSlPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#f23645] font-bold text-xs p-2 rounded border border-white/10 outline-none" />}
+                <div className="flex justify-between">
+                   <div className="flex gap-2 items-center">
+                      <input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)} className="accent-[#f23645]" />
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight">Stop Loss</span>
+                   </div>
+                   <span className={`text-[9px] font-mono ${slEnabled ? 'text-[#f23645]' : 'text-gray-600 opacity-50'}`}>{getDiff(slPrice)}%</span>
+                </div>
+                <div className={`relative transition-opacity ${!slEnabled && 'opacity-40'}`}>
+                   <input type="number" disabled={!slEnabled} value={slPrice} onChange={(e) => setSlPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#f23645] font-bold text-xs p-2 rounded border border-white/10 outline-none" />
+                   {!slEnabled && <div className="absolute inset-0 flex items-center pl-2 text-[8px] text-gray-500 font-bold uppercase pointer-events-none">Auto Protect</div>}
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* LIQUIDATION BOX */}
+        {/* INFO BOX */}
         <div className="bg-black/30 rounded-xl p-4 border border-white/5 space-y-3">
           <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase">Size</span><span className="text-white">${buyingPower.toLocaleString()}</span></div>
           <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase">Quantity</span><span className="text-white">{qty.toFixed(4)}</span></div>
           {tradingMode === 'futures' && (
             <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
-              <div><p className="text-[8px] text-gray-400 font-bold mb-1">LIQ. LONG</p><p className="text-xs font-black text-[#21ce99]">${liqPriceLong.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
-              <div className="text-right"><p className="text-[8px] text-gray-400 font-bold mb-1">LIQ. SHORT</p><p className="text-xs font-black text-[#f23645]">${liqPriceShort.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              <div><p className="text-[8px] text-gray-400 font-bold mb-1 uppercase tracking-tighter">Liq. Long</p><p className="text-xs font-black text-[#21ce99]">${liqPriceLong.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              <div className="text-right"><p className="text-[8px] text-gray-400 font-bold mb-1 uppercase tracking-tighter">Liq. Short</p><p className="text-xs font-black text-[#f23645]">${liqPriceShort.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
             </div>
           )}
         </div>
       </div>
 
-      {/* COOL NEON BUTTONS */}
+      {/* ACTION BUTTONS: Now forces the flip logic before trade */}
       <div className="p-4 grid grid-cols-2 gap-4 bg-black/40 border-t border-white/5">
         <motion.button 
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }} 
           whileTap={{ scale: 0.98 }}
+          onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('buy'); }} 
           onClick={() => handleTrade('buy')}
           disabled={isProcessing} 
           className="bg-gradient-to-b from-[#21ce99] to-[#00b07c] text-[#0b0e11] py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.3)] border-b-4 border-[#17a075] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          {isProcessing ? (
-             <Loader2 className="animate-spin" size={20} /> 
-          ) : (
+          {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (
              <>
                <span className="text-sm font-black tracking-tighter uppercase">Buy</span>
-               <span className="text-[8px] font-black opacity-60 uppercase">Long</span>
+               <span className="text-[8px] font-black opacity-60 uppercase tracking-widest">Long</span>
              </>
           )}
         </motion.button>
@@ -253,16 +267,15 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         <motion.button 
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }}
           whileTap={{ scale: 0.98 }}
+          onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('sell'); }} 
           onClick={() => handleTrade('sell')}
           disabled={isProcessing} 
           className="bg-gradient-to-b from-[#f23645] to-[#c71d2b] text-white py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.3)] border-b-4 border-[#a61a26] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          {isProcessing ? (
-             <Loader2 className="animate-spin" size={20} />
-          ) : (
+          {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (
              <>
                <span className="text-sm font-black tracking-tighter uppercase">Sell</span>
-               <span className="text-[8px] font-black opacity-60 uppercase">Short</span>
+               <span className="text-[8px] font-black opacity-60 uppercase tracking-widest">Short</span>
              </>
           )}
         </motion.button>
