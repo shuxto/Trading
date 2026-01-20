@@ -1,11 +1,9 @@
-// Setup type definitions for built-in Supabase Runtime APIs
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// ✅ FIXED IMPORTS: No inline URLs, using the map from deno.json
+import { createClient } from '@supabase/supabase-js'
 
-// Configuration
-const BINANCE_API = 'https://api.binance.com/api/v3/ticker/price';
+// ✅ CONFIGURATION: Using Twelve Data to match your Trade Engine
+const TWELVE_DATA_API = 'https://api.twelvedata.com/price';
 
-// CORS Headers to allow requests from your frontend
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -18,116 +16,141 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // 1. Initialize Supabase Admin Client (Service Role)
-    // This client bypasses Row Level Security (RLS) to modify balances securely
+    // 1. Initialize Supabase Admin Client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 2. Get the User from the Request Header (Security Check)
-    const authHeader = req.headers.get('Authorization')!
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
-    
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      })
-    }
+    // ✅ SECURE API KEY
+    const apiKey = Deno.env.get('TWELVE_DATA_API_KEY');
+    if (!apiKey) throw new Error('Missing TWELVE_DATA_API_KEY env variable');
 
     const { action, payload } = await req.json()
 
     // ============================================================
-    // ACTION: OPEN TRADE
+    // 🚀 NEW PRO FEATURE: SCAN & AUTO-CLOSE (THE WATCHTOWER)
     // ============================================================
-    if (action === 'open') {
-      const { symbol, type, size, leverage, account_id, stop_loss, take_profit } = payload;
+    if (action === 'scan_market') {
+      
+      // 1. Get ALL Open Trades
+      const { data: openTrades, error: fetchError } = await supabase
+        .from('trades')
+        .select('*')
+        .eq('status', 'open');
 
-      // A. Fetch REAL Price from Binance (Server-Side)
-      // We do NOT trust the price sent by the client
-      const cleanSymbol = symbol.replace('/', '');
-      const priceRes = await fetch(`${BINANCE_API}?symbol=${cleanSymbol}`);
-      const priceData = await priceRes.json();
-      const realPrice = parseFloat(priceData.price);
-
-      if (!realPrice || isNaN(realPrice)) {
-        throw new Error('Failed to fetch verified market price');
+      if (fetchError) throw fetchError;
+      if (!openTrades || openTrades.length === 0) {
+         return new Response(JSON.stringify({ message: 'No open trades to check' }), { 
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+         });
       }
 
-      // B. Calculate Margin Required
-      const margin = size / leverage;
+      // 2. Get Unique Symbols
+      // We use 'any' here, but it's allowed now because of deno.json
+      const uniqueSymbols = [...new Set(openTrades.map((t: any) => t.symbol))];
+      const closedTrades = [];
 
-      // C. Check User Balance
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', user.id).single();
-      
-      if (!profile || profile.balance < margin) {
-        return new Response(JSON.stringify({ error: 'Insufficient Balance' }), { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
+      // 3. Loop through symbols and check trades
+      for (const symbol of uniqueSymbols) {
+          // Fetch Real Price (Server Side)
+          const priceRes = await fetch(`${TWELVE_DATA_API}?symbol=${symbol}&apikey=${apiKey}`);
+          const priceData = await priceRes.json();
+          const currentPrice = parseFloat(priceData.price);
+
+          if (!currentPrice) continue; // Skip if API fails for this symbol
+
+          // Check all trades for this symbol
+          const tradesForSymbol = openTrades.filter((t: any) => t.symbol === symbol);
+
+          for (const trade of tradesForSymbol) {
+              let shouldClose = false;
+              let reason = '';
+
+              // A. LIQUIDATION CHECK (Futures)
+              if (trade.leverage > 1) {
+                  if (trade.type === 'buy' && currentPrice <= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
+                  if (trade.type === 'sell' && currentPrice >= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
+              }
+
+              // B. TAKE PROFIT CHECK
+              if (trade.take_profit) {
+                  if (trade.type === 'buy' && currentPrice >= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+                  if (trade.type === 'sell' && currentPrice <= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+              }
+
+              // C. STOP LOSS CHECK
+              if (trade.stop_loss) {
+                  if (trade.type === 'buy' && currentPrice <= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
+                  if (trade.type === 'sell' && currentPrice >= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
+              }
+
+              // D. EXECUTE CLOSE IF TRIGGERED
+              if (shouldClose) {
+                  // Calculate PnL
+                  let pnl = 0;
+                  if (trade.type === 'buy') {
+                      pnl = ((currentPrice - trade.entry_price) / trade.entry_price) * trade.size;
+                  } else {
+                      pnl = ((trade.entry_price - currentPrice) / trade.entry_price) * trade.size;
+                  }
+
+                  // Return Funds to Balance
+                  const returnAmount = trade.margin + pnl;
+                  
+                  // Update Account Balance
+                  const { data: account } = await supabase
+                    .from('trading_accounts')
+                    .select('balance')
+                    .eq('id', trade.account_id)
+                    .single();
+
+                  if (account) {
+                      await supabase
+                        .from('trading_accounts')
+                        .update({ balance: account.balance + returnAmount })
+                        .eq('id', trade.account_id);
+                  }
+
+                  // Close the Trade Record
+                  await supabase.from('trades').update({ 
+                      status: 'closed', 
+                      exit_price: currentPrice, 
+                      pnl: pnl, 
+                      closed_at: new Date().toISOString() 
+                  }).eq('id', trade.id);
+
+                  closedTrades.push({ id: trade.id, reason, pnl });
+              }
+          }
       }
 
-      // D. Execute Database Transaction
-      // 1. Deduct Balance
-      await supabase.from('profiles').update({ balance: profile.balance - margin }).eq('id', user.id);
-      
-      // 2. Calculate Liquidation Price
-      const liquidationPrice = type === 'buy' 
-          ? realPrice * (1 - (1/leverage) + 0.005) 
-          : realPrice * (1 + (1/leverage) - 0.005);
-
-      // 3. Insert Trade
-      const { data: trade, error } = await supabase.from('trades').insert([{
-        user_id: user.id,
-        account_id,
-        symbol,
-        type,
-        entry_price: realPrice, // ✅ Uses Verified Price
-        size,
-        leverage,
-        margin,
-        status: 'open',
-        stop_loss,
-        take_profit,
-        liquidation_price: liquidationPrice
-      }]).select().single();
-
-      if (error) throw error;
-
-      return new Response(JSON.stringify({ success: true, trade }), { 
-        status: 200,
+      return new Response(JSON.stringify({ success: true, closed_count: closedTrades.length, details: closedTrades }), { 
+        status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       });
     }
 
     // ============================================================
-    // ACTION: CLOSE TRADE
+    // MANUAL CLOSE ACTION
     // ============================================================
     if (action === 'close') {
       const { trade_id } = payload;
 
-      // A. Fetch Trade Details
+      const authHeader = req.headers.get('Authorization')!
+      const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+      if (authError || !user) throw new Error('Unauthorized');
+
       const { data: trade } = await supabase.from('trades').select('*').eq('id', trade_id).single();
       
-      // Security: Ensure the trade belongs to the user and is actually open
       if (!trade || trade.user_id !== user.id || trade.status !== 'open') {
-        return new Response(JSON.stringify({ error: 'Invalid Trade or already closed' }), { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
+        throw new Error('Invalid Trade');
       }
 
-      // B. Fetch REAL Price from Binance
-      const cleanSymbol = trade.symbol.replace('/', '');
-      const priceRes = await fetch(`${BINANCE_API}?symbol=${cleanSymbol}`);
+      const priceRes = await fetch(`${TWELVE_DATA_API}?symbol=${trade.symbol}&apikey=${apiKey}`);
       const priceData = await priceRes.json();
       const realPrice = parseFloat(priceData.price);
 
-      if (!realPrice) throw new Error('Failed to fetch verified market price');
-
-      // C. Calculate PnL
-      // Formula: (Price Diff / Entry Price) * Position Size
       let pnl = 0;
       if (trade.type === 'buy') {
          pnl = ((realPrice - trade.entry_price) / trade.entry_price) * trade.size;
@@ -135,15 +158,13 @@ Deno.serve(async (req) => {
          pnl = ((trade.entry_price - realPrice) / trade.entry_price) * trade.size;
       }
 
-      // Return amount = Initial Margin + Profit (or - Loss)
       const returnAmount = trade.margin + pnl;
 
-      // D. Update DB
-      // 1. Return funds to User Balance
-      const { data: profile } = await supabase.from('profiles').select('balance').eq('id', user.id).single();
-      await supabase.from('profiles').update({ balance: profile.balance + returnAmount }).eq('id', user.id);
+      const { data: account } = await supabase.from('trading_accounts').select('balance').eq('id', trade.account_id).single();
+      if (account) {
+        await supabase.from('trading_accounts').update({ balance: account.balance + returnAmount }).eq('id', trade.account_id);
+      }
       
-      // 2. Close Trade
       await supabase.from('trades').update({ 
         status: 'closed', 
         exit_price: realPrice, 
@@ -151,16 +172,13 @@ Deno.serve(async (req) => {
         closed_at: new Date().toISOString() 
       }).eq('id', trade_id);
 
-      return new Response(JSON.stringify({ success: true, pnl, exit_price: realPrice }), { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      });
+      return new Response(JSON.stringify({ success: true, pnl }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     throw new Error(`Unknown action: ${action}`);
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { 
+    return new Response(JSON.stringify({ error: error.message || 'Unknown error' }), { 
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })

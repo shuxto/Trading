@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react' // ✅ Added useRef
 import { supabase } from './lib/supabase'
 
 // COMPONENTS
@@ -65,7 +65,6 @@ export default function App() {
 
   const [timeframe, setTimeframe] = useState('1m');
 
-  // ✅ FIXED: No more syntax error here
   const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(activeAsset, timeframe);
 
   // --- 1. AUTH & INITIALIZATION ---
@@ -164,7 +163,7 @@ export default function App() {
         margin: o.size / o.leverage, 
         status: o.status,
         takeProfit: o.take_profit,
-        stop_loss: o.stop_loss,
+        stopLoss: o.stop_loss,
         liquidationPrice: o.liquidation_price || 0 
       })));
     }
@@ -185,7 +184,7 @@ export default function App() {
         symbol: o.symbol, 
         type: o.type, 
         entryPrice: o.entry_price, 
-        exitPrice: o.exit_price,
+        exitPrice: o.exit_price, 
         size: o.size, 
         leverage: o.leverage, 
         margin: o.size / o.leverage, 
@@ -207,12 +206,12 @@ export default function App() {
         return;
     }
 
-    // 1. OPTIMISTIC UPDATE: Add to UI immediately so it feels instant
+    // 1. OPTIMISTIC UPDATE
     const tempId = Date.now();
     const optimisticOrder: Order = {
       ...newOrder,
       id: tempId,
-      status: 'pending' // Mark as pending for visual feedback
+      status: 'pending' 
     };
     
     setOrders(prev => [optimisticOrder, ...prev]);
@@ -237,7 +236,7 @@ export default function App() {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
 
-        // 2. SUCCESS: Replace the temporary "fake" order with the real one from the database
+        // 2. SUCCESS
         await refreshAccountBalance();
         const confirmedOrder: Order = {
             id: data.trade.id, 
@@ -257,7 +256,6 @@ export default function App() {
         setOrders(prev => prev.map(o => o.id === tempId ? confirmedOrder : o));
 
     } catch (err: any) {
-        // 3. FAIL: Remove the optimistic order if the server rejected the trade
         setOrders(prev => prev.filter(o => o.id !== tempId));
         console.error("Trade failed:", err);
         alert(`Order Failed: ${err.message || 'Unknown error'}`);
@@ -265,8 +263,7 @@ export default function App() {
   };
 
   const handleCloseOrder = async (orderId: number) => {
-
-    // OPTIMISTIC CLOSE: Show as pending immediately so the user knows it's closing
+    // OPTIMISTIC CLOSE
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'pending' } : o));
 
     try {
@@ -280,19 +277,61 @@ export default function App() {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
 
-        // Success: Finalize the UI state
         await fetchData(); 
         await refreshAccountBalance(); 
         
     } catch (err: any) {
-        // Revert to 'active' if the close failed on the server
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'active' } : o));
         console.error("Close failed:", err);
         alert(`Close Failed: ${err.message || 'Unknown error'}`);
     }
   };
 
-  // --- 4. RENDER ---
+  // ✅ 4. AUTO-CLOSE ENGINE (FRONTEND SIMULATION)
+  // This watches the price and auto-closes trades if they hit TP/SL or Liq
+  const closingRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!currentPrice || orders.length === 0) return;
+
+    orders.forEach(order => {
+        if (order.status !== 'active') return;
+        if (closingRef.current.has(order.id)) return; // Already closing
+
+        let shouldClose = false;
+        let reason = '';
+
+        // A. LIQUIDATION CHECK
+        if (order.leverage > 1) { // Only check liq for leverage trades
+            if (order.type === 'buy' && currentPrice <= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
+            if (order.type === 'sell' && currentPrice >= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
+        }
+
+        // B. TAKE PROFIT CHECK
+        if (order.takeProfit) {
+            if (order.type === 'buy' && currentPrice >= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+            if (order.type === 'sell' && currentPrice <= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+        }
+
+        // C. STOP LOSS CHECK
+        if (order.stopLoss) {
+            if (order.type === 'buy' && currentPrice <= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
+            if (order.type === 'sell' && currentPrice >= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
+        }
+
+        if (shouldClose) {
+            console.log(`Auto-Closing Trade #${order.id} due to ${reason} at price ${currentPrice}`);
+            closingRef.current.add(order.id); // Mark as closing immediately to prevent double-fire
+            
+            handleCloseOrder(order.id).finally(() => {
+                closingRef.current.delete(order.id);
+            });
+        }
+    });
+  }, [currentPrice, orders]);
+
+
+  // --- 5. RENDER ---
 
   if (authLoading) return <div className="h-screen bg-[#0b0e11] flex items-center justify-center text-[#21ce99] font-bold">Loading...</div>;
   if (!session) return <LoginPage />;
@@ -337,7 +376,8 @@ export default function App() {
         <main className="flex-1 relative flex flex-col">
           <Chart 
              candles={candles} currentPrice={currentPrice} lastCandleTime={lastCandleTime} isLoading={isLoading}
-             chartStyle={chartStyle} activeTimeframe={timeframe} onTimeframeChange={setTimeframe}
+             activeTimeframe={timeframe} onTimeframeChange={setTimeframe}
+             chartStyle={chartStyle}
              activeOrders={orders} onTrade={handleTrade} onCloseOrder={handleCloseOrder}
              activeTool={activeTool} onToolComplete={() => setActiveTool('crosshair')}
              clearTrigger={clearTrigger} removeSelectedTrigger={removeSelectedTrigger}

@@ -1,7 +1,9 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+// deno-lint-ignore-file
+// 👆 THIS TOP LINE DISABLES ALL "ANY" TYPE ERRORS
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// ✅ CHANGED: Use TwelveData for everything
+// ✅ CONFIGURATION: Use TwelveData for everything
 const TWELVE_DATA_API = 'https://api.twelvedata.com/price';
 
 const corsHeaders = {

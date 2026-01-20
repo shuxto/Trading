@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; // ✅ Added Loader2
+import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; 
 import { useClickSound } from '../hooks/useClickSound';
 import type { Order } from '../types';
 
@@ -21,7 +21,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   const [leverage, setLeverage] = useState<number>(20);
   const [margin, setMargin] = useState<number>(100);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // ✅ Added Loading State
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [tpEnabled, setTpEnabled] = useState(false);
   const [slEnabled, setSlEnabled] = useState(false);
@@ -47,6 +47,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   }, [tpEnabled, slEnabled, price]);
 
   useEffect(() => {
+    // If we switch to Spot, disable manual inputs (we will inject defaults later)
     if (tradingMode === 'spot') {
       setTpEnabled(false);
       setSlEnabled(false);
@@ -71,21 +72,48 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     return diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
   };
 
-  const handleTrade = async (side: 'buy' | 'sell') => { // ✅ Made Async
+  const handleTrade = async (side: 'buy' | 'sell') => { 
     if (price <= 0) return;
-    if (tpEnabled && tpPrice) {
-      const tp = parseFloat(tpPrice);
-      if (side === 'buy' && tp <= price) { alert("⚠️ TP must be HIGHER than price."); return; }
-      if (side === 'sell' && tp >= price) { alert("⚠️ TP must be LOWER than price."); return; }
-    }
-    if (slEnabled && slPrice) {
-      const sl = parseFloat(slPrice);
-      if (side === 'buy' && sl >= price) { alert("⚠️ SL must be LOWER than price."); return; }
-      if (side === 'sell' && sl <= price) { alert("⚠️ SL must be HIGHER than price."); return; }
+
+    // VALIDATION FOR FUTURES (Manual TP/SL)
+    if (tradingMode === 'futures') {
+        if (tpEnabled && tpPrice) {
+            const tp = parseFloat(tpPrice);
+            if (side === 'buy' && tp <= price) { alert("⚠️ TP must be HIGHER than price."); return; }
+            if (side === 'sell' && tp >= price) { alert("⚠️ TP must be LOWER than price."); return; }
+        }
+        if (slEnabled && slPrice) {
+            const sl = parseFloat(slPrice);
+            if (side === 'buy' && sl >= price) { alert("⚠️ SL must be LOWER than price."); return; }
+            if (side === 'sell' && sl <= price) { alert("⚠️ SL must be HIGHER than price."); return; }
+        }
     }
 
     playClick();
-    setIsProcessing(true); // ✅ Start Loading
+    setIsProcessing(true); 
+
+    // ✅ PRO LOGIC: CALCULATE TP/SL
+    let finalTp: number | undefined;
+    let finalSl: number | undefined;
+
+    if (tradingMode === 'spot') {
+        // DEFAULT FIXED STRATEGY FOR SPOT
+        // TP: +20% | SL: -10% (User cannot change this, as requested)
+        if (side === 'buy') {
+            finalTp = price * 1.20; 
+            finalSl = price * 0.90; 
+        } else {
+            // Spot Sell (Shorting spot isn't real, but we treat it as selling asset)
+            // Usually you can't "open" a sell position in Spot without holding asset
+            // But for this simulator, we treat it like a simplified Short with 1x lev
+            finalTp = price * 0.80;
+            finalSl = price * 1.10;
+        }
+    } else {
+        // FUTURES: User Defined
+        finalTp = tpEnabled && tpPrice ? parseFloat(tpPrice) : undefined;
+        finalSl = slEnabled && slPrice ? parseFloat(slPrice) : undefined;
+    }
 
     const newOrder: Order = {
       id: Date.now(),
@@ -98,15 +126,14 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       size: buyingPower,
       liquidationPrice: side === 'buy' ? liqPriceLong : liqPriceShort,
       status: 'active',
-      takeProfit: tpEnabled && tpPrice ? parseFloat(tpPrice) : undefined,
-      stopLoss: slEnabled && slPrice ? parseFloat(slPrice) : undefined,
+      takeProfit: finalTp, // ✅ Apply Calculated TP
+      stopLoss: finalSl,   // ✅ Apply Calculated SL
     };
 
     try {
-        // ✅ Wait for the parent to finish the secure trade
         await onTrade(newOrder);
     } finally {
-        setIsProcessing(false); // ✅ Stop Loading
+        setIsProcessing(false); 
     }
   };
 
@@ -137,13 +164,19 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
         {/* LEVERAGE SLIDER */}
         <AnimatePresence>
-          {tradingMode === 'futures' && (
+          {tradingMode === 'futures' ? (
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="bg-white/5 rounded-xl p-3 border border-white/5">
               <div className="flex justify-between mb-2">
                 <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Leverage</span>
                 <span className="text-xs font-black text-[#F0B90B]">{leverage}x</span>
               </div>
               <input type="range" min="1" max="125" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#F0B90B]" />
+            </motion.div>
+          ) : (
+            // ✅ SHOW INFO FOR SPOT
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-[#21ce99]/10 border border-[#21ce99]/20 rounded-xl text-center">
+                <span className="text-[10px] font-bold text-[#21ce99] uppercase">Pro Spot Mode Active</span>
+                <p className="text-[9px] text-gray-400 mt-1">Auto-Protect enabled. <br/>TP: +20% | SL: -10%</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -163,7 +196,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           </div>
         </div>
 
-        {/* TP / SL SECTION */}
+        {/* TP / SL SECTION - HIDDEN IN SPOT MODE */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 bg-white/[0.02] p-3 rounded-xl border border-white/5">
@@ -198,10 +231,10 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }} 
           whileTap={{ scale: 0.98 }}
           onClick={() => handleTrade('buy')}
-          disabled={isProcessing} // ✅ Disable while loading
+          disabled={isProcessing} 
           className="bg-gradient-to-b from-[#21ce99] to-[#00b07c] text-[#0b0e11] py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.3)] border-b-4 border-[#17a075] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          {isProcessing ? ( // ✅ Show Loader
+          {isProcessing ? (
              <Loader2 className="animate-spin" size={20} /> 
           ) : (
              <>
@@ -215,10 +248,10 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           whileHover={{ scale: 1.02, filter: "brightness(1.2)" }}
           whileTap={{ scale: 0.98 }}
           onClick={() => handleTrade('sell')}
-          disabled={isProcessing} // ✅ Disable while loading
+          disabled={isProcessing} 
           className="bg-gradient-to-b from-[#f23645] to-[#c71d2b] text-white py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.3)] border-b-4 border-[#a61a26] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
-          {isProcessing ? ( // ✅ Show Loader
+          {isProcessing ? (
              <Loader2 className="animate-spin" size={20} />
           ) : (
              <>
