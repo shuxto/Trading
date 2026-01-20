@@ -13,7 +13,7 @@ import {
   CrosshairMode, 
   type Time, 
   type LineWidth,
-  TickMarkType // ✅ ADDED THIS IMPORT
+  TickMarkType 
 } from 'lightweight-charts';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
@@ -47,18 +47,15 @@ interface ChartProps {
 export default function Chart({ 
   candles, currentPrice, lastCandleTime, isLoading, 
   activeTimeframe, onTimeframeChange, chartStyle,
-  activeOrders, onTrade, onCloseOrder,
+  activeOrders, onCloseOrder,
   activeTool, onToolComplete, clearTrigger, removeSelectedTrigger, 
   isLocked, isHidden, displaySymbol, onTriggerPremium, symbol,
-  activeAccountId 
 }: ChartProps) {
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null); 
   
-  // Track the active range to apply specific zoom logic
   const [activeRange, setActiveRange] = useState<string | null>(null);
-  // Store the number of bars to zoom into
   const pendingZoomBars = useRef<number | null>(null);
 
   const [menuState, setMenuState] = useState<{ visible: boolean; x: number; y: number; price: number }>({
@@ -74,7 +71,6 @@ export default function Chart({
   const currentAnimatedPriceRef = useRef<number | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
-  // Zoom State Control
   const isNewAsset = useRef(true);
   const prevSymbol = useRef(symbol);
 
@@ -83,14 +79,12 @@ export default function Chart({
     if (tf.locked) { onTriggerPremium(); return; }
     onTimeframeChange(tf.value); 
     setActiveRange(null);
-    // ✅ TRADINGVIEW FIX: Zoom to the last 100 bars instead of showing everything
     pendingZoomBars.current = 100; 
   };
 
   const handleRangeClick = (range: typeof RANGES[0]) => {
     setActiveRange(range.label);
     onTimeframeChange(range.resolution); 
-    // Set the specific number of bars to zoom into (e.g., 60 for 1H)
     pendingZoomBars.current = range.bars;
   };
 
@@ -107,24 +101,15 @@ export default function Chart({
     setMenuState(prev => ({ ...prev, visible: false }));
   };
 
+  // ✅ UPDATED: NOW SIGNALS ORDER PANEL INSTEAD OF CREATING ORDER DIRECTLY
   const executeTrade = () => {
     if (!confirmAction) return;
-    const { type, price } = confirmAction;
+    const { type } = confirmAction;
     
-    // ✅ CHANGED: LEVERAGE 1x (SPOT MODE)
-    const newOrder: Order = {
-      id: Date.now(),
-      account_id: activeAccountId, 
-      type: type,
-      symbol: displaySymbol,
-      entryPrice: price,
-      margin: 100,
-      leverage: 1, 
-      size: 100,   
-      liquidationPrice: 0, // Spot has no liquidation price (technically 0)
-      status: 'active'
-    };
-    onTrade(newOrder);
+    // 🔥 Dispatch Event to OrderPanel
+    const event = new CustomEvent('trigger-trade', { detail: { side: type } });
+    window.dispatchEvent(event);
+
     setConfirmAction(null);
   };
 
@@ -146,7 +131,6 @@ export default function Chart({
         width: chartContainerRef.current.clientWidth,
         height: chartContainerRef.current.clientHeight,
         
-        // 1. FINAL SCALE SETTINGS (SMART AXIS)
         timeScale: { 
           timeVisible: true, 
           secondsVisible: false, 
@@ -156,36 +140,21 @@ export default function Chart({
           shiftVisibleRangeOnNewBar: true,
           uniformDistribution: true,
           
-          // ✅ SMART FORMATTER: Decides whether to show Time, Day, Month, or Year
           tickMarkFormatter: (time: number, tickMarkType: TickMarkType) => {
             const date = new Date(time * 1000);
-            
             switch (tickMarkType) {
-              case TickMarkType.Year:
-                return date.getUTCFullYear().toString();
-              
-              case TickMarkType.Month:
-                return date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
-              
-              case TickMarkType.DayOfMonth:
-                return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-              
-              case TickMarkType.Time:
-                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
-              
-              case TickMarkType.TimeWithSeconds:
-                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', hour12: false });
-              
-              default:
-                return "";
+              case TickMarkType.Year: return date.getUTCFullYear().toString();
+              case TickMarkType.Month: return date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+              case TickMarkType.DayOfMonth: return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+              case TickMarkType.Time: return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
+              case TickMarkType.TimeWithSeconds: return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', hour12: false });
+              default: return "";
             }
           },
         },
 
-        // 2. FINAL LOCALIZATION
         localization: {
           locale: 'en-GB',
-          // Default Crosshair (will be overridden by useEffect below)
           timeFormatter: (time: number) => {
             const date = new Date(time * 1000);
             return date.toLocaleString('en-GB', { 
@@ -295,54 +264,35 @@ export default function Chart({
   }, [chartStyle]);
 
   
-  // ✅ CROSSHAIR FORMATTER FIX (Separated from Axis Logic)
-  // This ensures the floating label (Crosshair) shows Date+Time for intraday, but just Date for Daily
   useEffect(() => {
     if (!chartRef.current) return;
-
     const isDaily = activeTimeframe === '1d' || activeTimeframe === '1w';
-
     chartRef.current.applyOptions({
       localization: {
         timeFormatter: (time: number) => {
           const date = new Date(time * 1000);
-          
           if (isDaily) {
-             // 1D/1W: Just Date (e.g., "20 Jan 2024")
              return date.toLocaleDateString('en-GB', { 
-               day: '2-digit', 
-               month: 'short', 
-               year: 'numeric',
-               timeZone: 'UTC' 
+               day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' 
              });
           }
-          
-          // 1m - 4h: Date + Time (e.g., "20 Jan 14:30")
           return date.toLocaleString('en-GB', { 
-            day: '2-digit',
-            month: 'short',
-            hour: '2-digit', 
-            minute: '2-digit', 
-            timeZone: 'UTC',
-            hour12: false 
+            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', 
+            timeZone: 'UTC', hour12: false 
           });
         },
       }
-      // Note: We do NOT set timeScale here anymore. It's handled by the Smart Switch in init.
     });
   }, [activeTimeframe]);
 
-
-  // Auto-fit on Symbol Change
   useEffect(() => {
     if (prevSymbol.current !== symbol) {
         isNewAsset.current = true;
         prevSymbol.current = symbol;
-        pendingZoomBars.current = 70; // Reset to default zoom on new symbol
+        pendingZoomBars.current = 70; 
     }
   }, [symbol]);
 
-  // Handle Crosshair
   useEffect(() => {
     if (chartRef.current) {
       const mode = activeTool ? CrosshairMode.Normal : CrosshairMode.Hidden;
@@ -356,7 +306,6 @@ export default function Chart({
     }
   }, [activeTool]);
 
-  // Data Update & Zoom Logic
   useEffect(() => {
     if (seriesRef.current) {
       if (chartStyle === 'line' || chartStyle === 'area' || chartStyle === 'stepline' || chartStyle === 'baseline') {
@@ -373,7 +322,6 @@ export default function Chart({
          })));
       }
 
-      // ✅ TRADINGVIEW SCALE FIX
       if ((isNewAsset.current || pendingZoomBars.current) && chartRef.current && candles.length > 0) {
           const totalBars = candles.length;
           const visibleBars = pendingZoomBars.current || 100; 
@@ -398,7 +346,6 @@ export default function Chart({
     }
   }, [candles, chartStyle]);
 
-  // Animation
   useEffect(() => {
     let frameId: number;
     const animate = () => {
@@ -500,13 +447,13 @@ export default function Chart({
               <div className="text-center space-y-1">
                  <h3 className="text-white font-bold text-lg">Confirm Transaction</h3>
                  <p className="text-[#9ca3af] text-xs">
-                    Are you sure you want to 
-                    <span className={`font-black uppercase mx-1 ${confirmAction.type === 'buy' ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
-                      {confirmAction.type}
-                    </span>
-                    at <span className="text-white font-mono">${confirmAction.price.toFixed(2)}</span>?
+                   Are you sure you want to 
+                   <span className={`font-black uppercase mx-1 ${confirmAction.type === 'buy' ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
+                     {confirmAction.type}
+                   </span>
+                   at <span className="text-white font-mono">${confirmAction.price.toFixed(2)}</span>?
                  </p>
-                 <p className="text-[10px] text-[#5e6673] mt-2 font-mono bg-black/30 rounded px-2 py-1 inline-block">1x Leverage (Spot)</p>
+                 <p className="text-[10px] text-[#5e6673] mt-2 font-mono bg-black/30 rounded px-2 py-1 inline-block">Executes Active Panel Settings</p>
               </div>
               <div className="flex w-full gap-3 mt-2">
                  <button 

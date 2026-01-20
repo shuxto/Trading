@@ -25,26 +25,27 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
   }, [lastOrderTime]);
 
   const renderContent = () => {
-    // 1. ACTIVE POSITIONS
     if (activeTab === 'positions') {
         return (
-            <table className="w-full text-left border-collapse min-w-[600px] md:min-w-full">
+            <table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
                 <thead className="sticky top-0 bg-[#151a21] z-10 text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                   <tr>
+                    <tr>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39]">Symbol</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39]">Side</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">Size</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden sm:table-cell">Entry Price</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden sm:table-cell">Mark Price</th>
+                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">TP</th> {/* ✅ Added TP Header */}
+                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">SL</th> {/* ✅ Added SL Header */}
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">Liq. Price</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">PnL (ROE%)</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-center">Close</th>
-                   </tr>
+                    </tr>
                 </thead>
                 <tbody className="text-xs font-mono font-medium text-gray-300">
-                   {orders.length === 0 ? (
-                      <tr><td colSpan={8} className="text-center py-10 text-gray-600 italic">No open positions</td></tr>
-                   ) : (
+                    {orders.length === 0 ? (
+                      <tr><td colSpan={10} className="text-center py-10 text-gray-600 italic">No open positions</td></tr>
+                    ) : (
                       orders.map(order => {
                           const price = currentPrice || 0;
                           const diff = price - order.entryPrice;
@@ -62,8 +63,6 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                                <td className="px-2 md:px-4 py-2 flex items-center gap-2">
                                   <span className="font-bold text-white">{order.symbol}</span>
                                   <span className="px-1 py-0.5 rounded bg-gray-800 text-[9px] text-gray-400 hidden sm:inline-block">{order.leverage}x</span>
-                                  
-                                  {/* ✅ PRO INDICATOR: Shows user the trade data instantly but notes it is syncing */}
                                   {order.status === 'pending' && (
                                     <span className="text-[8px] text-[#21ce99] font-black tracking-tighter animate-bounce px-1 bg-[#21ce99]/10 rounded">
                                       SYNCING
@@ -76,14 +75,26 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                                <td className="px-2 md:px-4 py-2 text-right">${order.size.toLocaleString()}</td>
                                <td className="px-2 md:px-4 py-2 text-right hidden sm:table-cell">{order.entryPrice.toFixed(2)}</td>
                                <td className="px-2 md:px-4 py-2 text-right hidden sm:table-cell">{price.toFixed(2)}</td>
-                               <td className="px-2 md:px-4 py-2 text-right text-[#F0B90B] hidden md:table-cell">{order.liquidationPrice.toFixed(2)}</td>
+                               
+                               {/* ✅ TP DATA CELL */}
+                               <td className="px-2 md:px-4 py-2 text-right text-[#21ce99] hidden md:table-cell">
+                                 {order.takeProfit ? order.takeProfit.toFixed(2) : '--'}
+                               </td>
+
+                               {/* ✅ SL DATA CELL */}
+                               <td className="px-2 md:px-4 py-2 text-right text-[#f23645] hidden md:table-cell">
+                                 {order.stopLoss ? order.stopLoss.toFixed(2) : '--'}
+                               </td>
+
+                               <td className="px-2 md:px-4 py-2 text-right text-[#F0B90B] hidden md:table-cell">
+                                 {order.liquidationPrice > 0 ? order.liquidationPrice.toFixed(2) : '--'}
+                               </td>
                                <td className={`px-2 md:px-4 py-2 text-right font-bold ${isProfit ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
                                   {pnlValue > 0 ? '+' : ''}{pnlValue.toFixed(2)} 
                                   <span className="text-[9px] md:text-[10px] opacity-70 ml-1 block sm:inline">({pnlPercent.toFixed(2)}%)</span>
                                </td>
                                <td className="px-2 md:px-4 py-2 text-center">
                                   {order.status === 'pending' ? (
-                                    /* ✅ TINY SPINNER: Row keeps its shape while database finishes */
                                     <div className="w-3 h-3 border-2 border-[#21ce99]/20 border-t-[#21ce99] rounded-full animate-spin mx-auto" />
                                   ) : (
                                     <button onClick={(e) => { e.stopPropagation(); onCloseOrder(order.id); }} className="p-1 hover:bg-[#2a2e39] rounded text-gray-500 hover:text-white transition-colors">
@@ -94,13 +105,12 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                             </tr>
                           );
                       })
-                   )}
+                    )}
                 </tbody>
             </table>
         );
     } 
     
-    // 2. OPEN ORDERS (Pending)
     else if (activeTab === 'open') {
         return (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 py-10">
@@ -111,12 +121,11 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
         );
     } 
     
-    // 3. HISTORY (Closed)
     else if (activeTab === 'history') {
         return (
             <table className="w-full text-left border-collapse min-w-[600px] md:min-w-full">
                 <thead className="sticky top-0 bg-[#151a21] z-10 text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                   <tr>
+                    <tr>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39]">Time</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39]">Symbol</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39]">Side</th>
@@ -124,12 +133,12 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">Entry</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">Exit</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">Realized PnL</th>
-                   </tr>
+                    </tr>
                 </thead>
                 <tbody className="text-xs font-mono font-medium text-gray-300">
-                   {history.length === 0 ? (
+                    {history.length === 0 ? (
                       <tr><td colSpan={7} className="text-center py-10 text-gray-600 italic">No trade history found</td></tr>
-                   ) : (
+                    ) : (
                       history.map(order => {
                           const isProfit = (order.pnl || 0) >= 0;
                           return (
@@ -153,7 +162,7 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                             </tr>
                           );
                       })
-                   )}
+                    )}
                 </tbody>
             </table>
         );

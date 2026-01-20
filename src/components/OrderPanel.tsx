@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react"; // ✅ Added useCallback
 import { motion, AnimatePresence } from "framer-motion";
 import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; 
 import { useClickSound } from '../hooks/useClickSound';
@@ -47,7 +47,6 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   }, [tpEnabled, slEnabled, price]);
 
   useEffect(() => {
-    // If we switch to Spot, disable manual inputs (we will inject defaults later)
     if (tradingMode === 'spot') {
       setTpEnabled(false);
       setSlEnabled(false);
@@ -72,7 +71,8 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     return diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
   };
 
-  const handleTrade = async (side: 'buy' | 'sell') => { 
+  // ✅ WRAPPED IN useCallback SO IT CAN BE CALLED BY THE EVENT LISTENER
+  const handleTrade = useCallback(async (side: 'buy' | 'sell') => { 
     if (price <= 0) return;
 
     // VALIDATION FOR FUTURES (Manual TP/SL)
@@ -97,20 +97,14 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     let finalSl: number | undefined;
 
     if (tradingMode === 'spot') {
-        // DEFAULT FIXED STRATEGY FOR SPOT
-        // TP: +20% | SL: -10% (User cannot change this, as requested)
         if (side === 'buy') {
             finalTp = price * 1.20; 
             finalSl = price * 0.90; 
         } else {
-            // Spot Sell (Shorting spot isn't real, but we treat it as selling asset)
-            // Usually you can't "open" a sell position in Spot without holding asset
-            // But for this simulator, we treat it like a simplified Short with 1x lev
             finalTp = price * 0.80;
             finalSl = price * 1.10;
         }
     } else {
-        // FUTURES: User Defined
         finalTp = tpEnabled && tpPrice ? parseFloat(tpPrice) : undefined;
         finalSl = slEnabled && slPrice ? parseFloat(slPrice) : undefined;
     }
@@ -126,8 +120,8 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       size: buyingPower,
       liquidationPrice: side === 'buy' ? liqPriceLong : liqPriceShort,
       status: 'active',
-      takeProfit: finalTp, // ✅ Apply Calculated TP
-      stopLoss: finalSl,   // ✅ Apply Calculated SL
+      takeProfit: finalTp, 
+      stopLoss: finalSl,   
     };
 
     try {
@@ -135,7 +129,20 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     } finally {
         setIsProcessing(false); 
     }
-  };
+  }, [price, tradingMode, tpEnabled, tpPrice, slEnabled, slPrice, activeAccountId, activeSymbol, margin, effectiveLeverage, buyingPower, liqPriceLong, liqPriceShort, onTrade, playClick]);
+
+  // ✅ NEW: LISTEN FOR CHART SIGNALS
+  useEffect(() => {
+    const handleRemoteTrade = (e: CustomEvent) => {
+        if (e.detail && (e.detail.side === 'buy' || e.detail.side === 'sell')) {
+            console.log("📡 OrderPanel received signal:", e.detail.side);
+            handleTrade(e.detail.side);
+        }
+    };
+
+    window.addEventListener('trigger-trade' as any, handleRemoteTrade as any);
+    return () => window.removeEventListener('trigger-trade' as any, handleRemoteTrade as any);
+  }, [handleTrade]);
 
   return (
     <aside 
@@ -173,7 +180,6 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
               <input type="range" min="1" max="125" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#F0B90B]" />
             </motion.div>
           ) : (
-            // ✅ SHOW INFO FOR SPOT
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-[#21ce99]/10 border border-[#21ce99]/20 rounded-xl text-center">
                 <span className="text-[10px] font-bold text-[#21ce99] uppercase">Pro Spot Mode Active</span>
                 <p className="text-[9px] text-gray-400 mt-1">Auto-Protect enabled. <br/>TP: +20% | SL: -10%</p>
@@ -196,7 +202,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
           </div>
         </div>
 
-        {/* TP / SL SECTION - HIDDEN IN SPOT MODE */}
+        {/* TP / SL SECTION */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 bg-white/[0.02] p-3 rounded-xl border border-white/5">
