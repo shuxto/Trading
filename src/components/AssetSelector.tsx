@@ -4,9 +4,6 @@ import { ASSETS } from '../constants/assets';
 import { supabase } from '../lib/supabase';
 import type { Asset } from '../types';
 
-// ✅ Your Paid Key
-const TWELVE_DATA_API_KEY = "05e7f5f30b384f11936a130f387c4092";
-
 interface AssetSelectorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -89,66 +86,51 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
   useEffect(() => {
     if (!isOpen) return;
 
-    // --- 1. FETCH BINANCE PRICES (For Crypto) ---
-    const fetchBinancePrices = async () => {
+    // ✅ FIXED: Single Unified Engine using Twelve Data PRO
+    // This replaces both the old Binance call and the old Price call.
+    const fetchMarketData = async () => {
       try {
-        const cryptoAssets = ASSETS.filter(a => a.source === 'binance');
-        if (cryptoAssets.length === 0) return;
+        // 1. Get ALL symbols from your assets file
+        const symbols = ASSETS.map(a => a.symbol).join(',');
+        
+        // 2. Call the Proxy using the 'quote' endpoint (gives Price + Change)
+        const { data, error } = await supabase.functions.invoke('market-proxy', {
+            body: {
+                endpoint: 'quote', 
+                params: { 
+                    symbol: symbols,
+                    dp: 4 // Decimal places
+                }
+            }
+        });
 
-        // Binance Batch Request (Symbol List)
-        // Format: ["BTCUSDT","ETHUSDT"]
-        const symbols = JSON.stringify(cryptoAssets.map(a => a.symbol));
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbols=${symbols}`);
-        const data = await res.json();
+        if (error) throw error;
 
-        if (Array.isArray(data)) {
+        // 3. Update State
+        if (data && !data.code) {
           setLiveAssets(prev => prev.map(asset => {
-            const update = data.find((d: any) => d.symbol === asset.symbol);
+            // If fetching multiple, data is { "BTC/USD": {...}, "AAPL": {...} }
+            // If fetching one, data is { symbol: "BTC/USD", ... }
+            const update = data[asset.symbol] || (data.symbol === asset.symbol ? data : null);
+            
             if (update) {
               return { 
-                ...asset, 
-                price: parseFloat(update.lastPrice),
-                change: parseFloat(update.priceChangePercent)
+                  ...asset, 
+                  price: parseFloat(update.close) || 0,
+                  change: parseFloat(update.percent_change) || 0
               };
             }
             return asset;
           }));
         }
       } catch (e) {
-        console.error("Binance Fetch Error:", e);
+        console.error("Market Data Fetch Error:", e);
       }
     };
 
-    // --- 2. FETCH TWELVE DATA PRICES (For Stocks/Forex/Commodities) ---
-    const fetchTwelveDataPrices = async () => {
-      try {
-        const proAssets = ASSETS.filter(a => a.source === 'twelve');
-        if (proAssets.length === 0) return;
+    fetchMarketData();
 
-        const symbols = proAssets.map(a => a.symbol).join(',');
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=${symbols}&apikey=${TWELVE_DATA_API_KEY}`);
-        const data = await res.json();
-
-        // Data format: { "AAPL": { "price": "150.00" }, ... }
-        if (data && !data.code) {
-          setLiveAssets(prev => prev.map(asset => {
-            const update = data[asset.symbol];
-            if (update && update.price) {
-              return { ...asset, price: parseFloat(update.price) };
-            }
-            return asset;
-          }));
-        }
-      } catch (e) {
-        console.error("Twelve Data Fetch Error:", e);
-      }
-    };
-
-    // Trigger both fetches
-    fetchBinancePrices();
-    fetchTwelveDataPrices();
-
-    // --- 3. LISTEN TO SUPABASE (For Real-time ticks) ---
+    // 4. Real-time updates via Supabase Broadcast (Optional backup)
     const channel = supabase.channel('market_prices');
     channel.on('broadcast', { event: 'price_update' }, (payload) => {
         const update = payload.payload;
@@ -237,8 +219,9 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
           )}
         </div>
 
+        {/* FOOTER - UPDATED */}
         <div className="p-3 border-t border-white/5 bg-[#0b0e11]/30 text-[10px] text-center text-[#5e6673]">
-          Data provided by <span className="text-[#21ce99]">Binance</span> & <span className="text-[#21ce99]">Twelve Data Pro</span>
+          Data provided by <span className="text-[#21ce99]">Twelve Data Pro</span>
         </div>
 
       </div>
