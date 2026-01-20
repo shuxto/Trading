@@ -4,6 +4,10 @@ import { ASSETS } from '../constants/assets';
 import { supabase } from '../lib/supabase';
 import type { Asset } from '../types';
 
+// ✅ CACHE SETTINGS: 1 Minute (60,000ms)
+const CACHE_KEY = 'asset_prices_cache';
+const CACHE_DURATION = 60 * 1000; 
+
 interface AssetSelectorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -86,33 +90,47 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
   useEffect(() => {
     if (!isOpen) return;
 
-    // ✅ FIXED: Single Unified Engine using Twelve Data PRO
-    // This replaces both the old Binance call and the old Price call.
     const fetchMarketData = async () => {
+      // 1. 🛑 CHECK CACHE FIRST
+      const cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        try {
+          const { timestamp, data } = JSON.parse(cachedData);
+          const age = Date.now() - timestamp;
+          
+          if (age < CACHE_DURATION) {
+            console.log(`[AssetSelector] Loading from Cache (${Math.round(age/1000)}s old)`);
+            setLiveAssets(data);
+            return; // ✅ EXIT: Don't fetch from API
+          }
+        } catch (e) {
+          console.error("Cache parsing error", e);
+          localStorage.removeItem(CACHE_KEY);
+        }
+      }
+
+      console.log("[AssetSelector] Cache expired or empty. Fetching live data...");
+
       try {
-        // 1. Get ALL symbols from your assets file
         const symbols = ASSETS.map(a => a.symbol).join(',');
         
-        // 2. Call the Proxy using the 'quote' endpoint (gives Price + Change)
+        // 2. 🌍 FETCH LIVE (Only if cache failed/expired)
         const { data, error } = await supabase.functions.invoke('market-proxy', {
             body: {
                 endpoint: 'quote', 
                 params: { 
                     symbol: symbols,
-                    dp: 4 // Decimal places
+                    dp: 4 
                 }
             }
         });
 
         if (error) throw error;
 
-        // 3. Update State
+        // 3. 💾 UPDATE STATE & SAVE TO CACHE
         if (data && !data.code) {
-          setLiveAssets(prev => prev.map(asset => {
-            // If fetching multiple, data is { "BTC/USD": {...}, "AAPL": {...} }
-            // If fetching one, data is { symbol: "BTC/USD", ... }
+          const updatedAssets = ASSETS.map(asset => {
             const update = data[asset.symbol] || (data.symbol === asset.symbol ? data : null);
-            
             if (update) {
               return { 
                   ...asset, 
@@ -121,6 +139,14 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
               };
             }
             return asset;
+          });
+
+          setLiveAssets(updatedAssets);
+          
+          // Save to LocalStorage
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            data: updatedAssets
           }));
         }
       } catch (e) {
@@ -130,7 +156,7 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
 
     fetchMarketData();
 
-    // 4. Real-time updates via Supabase Broadcast (Optional backup)
+    // 4. Real-time updates (Optional - Runs on top of cache)
     const channel = supabase.channel('market_prices');
     channel.on('broadcast', { event: 'price_update' }, (payload) => {
         const update = payload.payload;
@@ -219,9 +245,8 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
           )}
         </div>
 
-        {/* FOOTER - UPDATED */}
         <div className="p-3 border-t border-white/5 bg-[#0b0e11]/30 text-[10px] text-center text-[#5e6673]">
-          Data provided by <span className="text-[#21ce99]">Twelve Data Pro</span>
+          Data provided by <span className="text-[#21ce99]">Twelve Data Pro</span> (Cached 1m)
         </div>
 
       </div>

@@ -1,7 +1,8 @@
-// ✅ FIXED IMPORTS: No inline URLs, using the map from deno.json
+// supabase/functions/auto-close-engine/index.ts
+
+// ✅ FIX 1: Use the clean import name (mapped in deno.json)
 import { createClient } from '@supabase/supabase-js'
 
-// ✅ CONFIGURATION: Using Twelve Data to match your Trade Engine
 const TWELVE_DATA_API = 'https://api.twelvedata.com/price';
 
 const corsHeaders = {
@@ -10,26 +11,23 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // 1. Initialize Supabase Admin Client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // ✅ SECURE API KEY
     const apiKey = Deno.env.get('TWELVE_DATA_API_KEY');
     if (!apiKey) throw new Error('Missing TWELVE_DATA_API_KEY env variable');
 
     const { action, payload } = await req.json()
 
     // ============================================================
-    // 🚀 NEW PRO FEATURE: SCAN & AUTO-CLOSE (THE WATCHTOWER)
+    // 🚀 ACTION: SCAN & AUTO-CLOSE (BATCH OPTIMIZED)
     // ============================================================
     if (action === 'scan_market') {
       
@@ -47,81 +45,95 @@ Deno.serve(async (req) => {
       }
 
       // 2. Get Unique Symbols
-      // We use 'any' here, but it's allowed now because of deno.json
       const uniqueSymbols = [...new Set(openTrades.map((t: any) => t.symbol))];
       const closedTrades = [];
 
-      // 3. Loop through symbols and check trades
-      for (const symbol of uniqueSymbols) {
-          // Fetch Real Price (Server Side)
-          const priceRes = await fetch(`${TWELVE_DATA_API}?symbol=${symbol}&apikey=${apiKey}`);
-          const priceData = await priceRes.json();
-          const currentPrice = parseFloat(priceData.price);
+      // 3. ⚡ BATCH FETCH: Get all prices in ONE request
+      const symbolString = uniqueSymbols.join(',');
+      const priceRes = await fetch(`${TWELVE_DATA_API}?symbol=${symbolString}&apikey=${apiKey}`);
+      const priceData = await priceRes.json();
 
-          if (!currentPrice) continue; // Skip if API fails for this symbol
+      // Normalize Response
+      // ✅ FIX 2: Use 'const' because we don't reassign the variable itself
+      const pricesMap: Record<string, number> = {};
 
-          // Check all trades for this symbol
-          const tradesForSymbol = openTrades.filter((t: any) => t.symbol === symbol);
+      if (uniqueSymbols.length === 1) {
+          // Single symbol case
+          if (priceData.price) {
+              pricesMap[uniqueSymbols[0]] = parseFloat(priceData.price);
+          }
+      } else {
+          // Multiple symbol case
+          for (const sym of uniqueSymbols) {
+              if (priceData[sym] && priceData[sym].price) {
+                  pricesMap[sym] = parseFloat(priceData[sym].price);
+              }
+          }
+      }
 
-          for (const trade of tradesForSymbol) {
-              let shouldClose = false;
-              let reason = '';
+      // 4. Check Trades against the fetched prices
+      for (const trade of openTrades) {
+          const currentPrice = pricesMap[trade.symbol];
 
-              // A. LIQUIDATION CHECK (Futures)
-              if (trade.leverage > 1) {
-                  if (trade.type === 'buy' && currentPrice <= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
-                  if (trade.type === 'sell' && currentPrice >= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
+          // Skip if we failed to get a price for this specific symbol
+          if (!currentPrice) continue;
+
+          let shouldClose = false;
+          let reason = '';
+
+          // A. LIQUIDATION CHECK (Futures)
+          if (trade.leverage > 1) {
+              if (trade.type === 'buy' && currentPrice <= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
+              if (trade.type === 'sell' && currentPrice >= trade.liquidation_price) { shouldClose = true; reason = 'LIQUIDATION'; }
+          }
+
+          // B. TAKE PROFIT CHECK
+          if (trade.take_profit) {
+              if (trade.type === 'buy' && currentPrice >= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+              if (trade.type === 'sell' && currentPrice <= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+          }
+
+          // C. STOP LOSS CHECK
+          if (trade.stop_loss) {
+              if (trade.type === 'buy' && currentPrice <= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
+              if (trade.type === 'sell' && currentPrice >= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
+          }
+
+          // D. EXECUTE CLOSE IF TRIGGERED
+          if (shouldClose) {
+              // Calculate PnL
+              let pnl = 0;
+              if (trade.type === 'buy') {
+                  pnl = ((currentPrice - trade.entry_price) / trade.entry_price) * trade.size;
+              } else {
+                  pnl = ((trade.entry_price - currentPrice) / trade.entry_price) * trade.size;
               }
 
-              // B. TAKE PROFIT CHECK
-              if (trade.take_profit) {
-                  if (trade.type === 'buy' && currentPrice >= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
-                  if (trade.type === 'sell' && currentPrice <= trade.take_profit) { shouldClose = true; reason = 'TAKE PROFIT'; }
-              }
+              const returnAmount = trade.margin + pnl;
+              
+              // Refund/Update Balance
+              const { data: account } = await supabase
+                .from('trading_accounts')
+                .select('balance')
+                .eq('id', trade.account_id)
+                .single();
 
-              // C. STOP LOSS CHECK
-              if (trade.stop_loss) {
-                  if (trade.type === 'buy' && currentPrice <= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
-                  if (trade.type === 'sell' && currentPrice >= trade.stop_loss) { shouldClose = true; reason = 'STOP LOSS'; }
-              }
-
-              // D. EXECUTE CLOSE IF TRIGGERED
-              if (shouldClose) {
-                  // Calculate PnL
-                  let pnl = 0;
-                  if (trade.type === 'buy') {
-                      pnl = ((currentPrice - trade.entry_price) / trade.entry_price) * trade.size;
-                  } else {
-                      pnl = ((trade.entry_price - currentPrice) / trade.entry_price) * trade.size;
-                  }
-
-                  // Return Funds to Balance
-                  const returnAmount = trade.margin + pnl;
-                  
-                  // Update Account Balance
-                  const { data: account } = await supabase
+              if (account) {
+                  await supabase
                     .from('trading_accounts')
-                    .select('balance')
-                    .eq('id', trade.account_id)
-                    .single();
-
-                  if (account) {
-                      await supabase
-                        .from('trading_accounts')
-                        .update({ balance: account.balance + returnAmount })
-                        .eq('id', trade.account_id);
-                  }
-
-                  // Close the Trade Record
-                  await supabase.from('trades').update({ 
-                      status: 'closed', 
-                      exit_price: currentPrice, 
-                      pnl: pnl, 
-                      closed_at: new Date().toISOString() 
-                  }).eq('id', trade.id);
-
-                  closedTrades.push({ id: trade.id, reason, pnl });
+                    .update({ balance: account.balance + returnAmount })
+                    .eq('id', trade.account_id);
               }
+
+              // Close Trade
+              await supabase.from('trades').update({ 
+                  status: 'closed', 
+                  exit_price: currentPrice, 
+                  pnl: pnl, 
+                  closed_at: new Date().toISOString() 
+              }).eq('id', trade.id);
+
+              closedTrades.push({ id: trade.id, symbol: trade.symbol, reason, pnl });
           }
       }
 

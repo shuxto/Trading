@@ -1,13 +1,31 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 
 export const useClickSound = () => {
+  // 1. Create the audio object ONCE and keep it in a "ref"
+  // This prevents the browser from reloading the file on every click
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio('/sounds/click.mp3');
+    audioRef.current.volume = 0.5;
+  }, []);
+
   const playClick = useCallback(() => {
     try {
-      // Create a new Audio object for every click to allow overlapping sounds
-      // (So if you click fast, it doesn't cut off the previous sound)
-      const audio = new Audio('/sounds/click.mp3');
-      audio.volume = 0.5; // Adjustable volume (0.0 to 1.0)
-      audio.play().catch((e) => console.error("Audio play failed", e));
+      if (audioRef.current) {
+        // 2. Clone the existing node
+        // cloning is faster than 'new Audio()' and allows overlapping sounds
+        const sound = audioRef.current.cloneNode() as HTMLAudioElement;
+        sound.volume = 0.5; 
+        
+        // 3. Play securely
+        sound.play().catch((e) => {
+            // Ignore "user didn't interact yet" errors
+            if (e.name !== 'NotAllowedError') {
+                console.error("Audio play failed", e);
+            }
+        });
+      }
     } catch (error) {
       console.error("Audio error", error);
     }
