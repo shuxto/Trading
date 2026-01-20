@@ -35,6 +35,7 @@ export default function App() {
   // VIEW STATE
   const [currentView, setCurrentView] = useState<'portal' | 'trading'>('portal');
   const [activeAccount, setActiveAccount] = useState<TradingAccount | null>(null);
+  const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]); // ✅ Added to store accounts for the switcher
 
   // TRADING STATE
   const [orders, setOrders] = useState<Order[]>([])
@@ -73,7 +74,8 @@ export default function App() {
       setSession(session);
       if (session) {
         checkUser(session.user.id);
-        checkUrlParams(session.user.id); 
+        checkUrlParams(session.user.id);
+        fetchUserAccounts(session.user.id); // ✅ Fetch accounts for the header switcher
       } else {
         setAuthLoading(false);
       }
@@ -83,6 +85,7 @@ export default function App() {
       setSession(session);
       if (session) {
         checkUser(session.user.id);
+        fetchUserAccounts(session.user.id); // ✅ Fetch accounts on auth change
       } else {
         setRole(null);
         setAuthLoading(false);
@@ -92,13 +95,21 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ✅ New function to fetch all accounts belonging to the user
+  const fetchUserAccounts = async (userId: string) => {
+    const { data } = await supabase
+      .from('trading_accounts')
+      .select('*')
+      .eq('user_id', userId);
+    if (data) setUserAccounts(data);
+  };
+
   const checkUrlParams = async (userId: string) => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     const accountId = params.get('account_id');
 
     if (mode === 'trading' && accountId) {
-       // Fetch Account Details INCLUDING Balance
        const { data } = await supabase
           .from('trading_accounts')
           .select('*')
@@ -288,7 +299,6 @@ export default function App() {
   };
 
   // ✅ 4. AUTO-CLOSE ENGINE (FRONTEND SIMULATION)
-  // This watches the price and auto-closes trades if they hit TP/SL or Liq
   const closingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
@@ -296,37 +306,35 @@ export default function App() {
 
     orders.forEach(order => {
         if (order.status !== 'active') return;
-        if (closingRef.current.has(order.id)) return; // Already closing
+        if (closingRef.current.has(order.id)) return; 
 
         let shouldClose = false;
         let reason = '';
 
-        // A. LIQUIDATION CHECK
-        if (order.leverage > 1) { // Only check liq for leverage trades
+        if (order.leverage > 1) { 
             if (order.type === 'buy' && currentPrice <= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
             if (order.type === 'sell' && currentPrice >= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
         }
 
-        // B. TAKE PROFIT CHECK
         if (order.takeProfit) {
             if (order.type === 'buy' && currentPrice >= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
             if (order.type === 'sell' && currentPrice <= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
         }
 
-        // C. STOP LOSS CHECK
         if (order.stopLoss) {
             if (order.type === 'buy' && currentPrice <= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
             if (order.type === 'sell' && currentPrice >= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
         }
 
-        if (shouldClose) {
-            console.log(`Auto-Closing Trade #${order.id} due to ${reason} at price ${currentPrice}`);
-            closingRef.current.add(order.id); // Mark as closing immediately to prevent double-fire
-            
-            handleCloseOrder(order.id).finally(() => {
-                closingRef.current.delete(order.id);
-            });
-        }
+      if (shouldClose) {
+    // ⬇️ ADD THIS ONE LINE ⬇️
+    console.log("Closing trade reason:", reason); 
+
+    closingRef.current.add(order.id); 
+    handleCloseOrder(order.id).finally(() => {
+        closingRef.current.delete(order.id);
+    });
+}
     });
   }, [currentPrice, orders]);
 
@@ -348,21 +356,22 @@ export default function App() {
       <WorldMap />
       
       <Header 
-        activeAsset={activeAsset} 
-        balance={accountBalance} 
-        activeAccountName={activeAccount?.name}
-        onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
-        onOpenDashboardPopup={() => {
-            window.history.pushState({}, '', window.location.origin);
-            setCurrentView('portal');
-            setActiveAccount(null);
-        }} 
-        onOpenProfilePage={() => {
-            window.history.pushState({}, '', window.location.origin);
-            setCurrentView('portal');
-            setActiveAccount(null);
-        }}
-      />
+  activeAsset={activeAsset} 
+  balance={accountBalance} 
+  activeAccountName={activeAccount?.name}
+  userAccounts={userAccounts} // 👈 JUST ADD THIS LINE
+  onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
+  onOpenDashboardPopup={() => {
+      window.history.pushState({}, '', window.location.origin);
+      setCurrentView('portal');
+      setActiveAccount(null);
+  }} 
+  onOpenProfilePage={() => {
+      window.history.pushState({}, '', window.location.origin);
+      setCurrentView('portal');
+      setActiveAccount(null);
+  }}
+/>
       
       <div className="flex-1 flex min-h-0 relative z-10 pb-[40px]">
         <Sidebar 
