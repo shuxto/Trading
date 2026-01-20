@@ -130,19 +130,64 @@ export default function Chart({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-    if (!chartRef.current) {
-      const chart = createChart(chartContainerRef.current, {
-        layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#9ca3af', attributionLogo: false },
-        grid: { vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } },
-        width: chartContainerRef.current.clientWidth,
-        height: chartContainerRef.current.clientHeight,
-        timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#2a2e39', rightOffset: 12, barSpacing: 6 },
-        rightPriceScale: { borderColor: 'transparent' },
-        crosshair: { mode: CrosshairMode.Normal },
-      });
+   // Find this section in src/components/Chart.tsx
+if (!chartRef.current) {
+  const chart = createChart(chartContainerRef.current, {
+    layout: { 
+      background: { type: ColorType.Solid, color: 'transparent' }, 
+      textColor: '#9ca3af', 
+      attributionLogo: false 
+    },
+    grid: { 
+      vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, 
+      horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } 
+    },
+    width: chartContainerRef.current.clientWidth,
+    height: chartContainerRef.current.clientHeight,
+    
+    // 1. FINAL SCALE SETTINGS
+    timeScale: { 
+      timeVisible: true, 
+      secondsVisible: false, 
+      borderColor: '#2a2e39', 
+      rightOffset: 12, 
+      barSpacing: 6,
+      shiftVisibleRangeOnNewBar: true,
+      // ✅ ADD THIS: Helps keep time labels consistent
+      uniformDistribution: true,
+      // ✅ FORCED AXIS LABELS:
+      tickMarkFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        return date.toLocaleTimeString('en-GB', { 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          timeZone: 'UTC',
+          hour12: false 
+        });
+      },
+    },
 
-      chartRef.current = chart;
-      setChartApi(chart);
+    // 2. FINAL LOCALIZATION
+    localization: {
+      locale: 'en-GB',
+      // ✅ FORCED CROSSHAIR BOX:
+      timeFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        return date.toLocaleTimeString('en-GB', { 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          timeZone: 'UTC',
+          hour12: false 
+        });
+      },
+    },
+
+    rightPriceScale: { borderColor: 'transparent' },
+    crosshair: { mode: CrosshairMode.Normal },
+  });
+
+  chartRef.current = chart;
+  setChartApi(chart);
 
       const handleResize = () => { if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight }); };
       window.addEventListener('resize', handleResize);
@@ -233,7 +278,7 @@ export default function Chart({
       }
     }
 
-  }, [chartStyle]); 
+  }, [chartStyle]);
 
   // Auto-fit on Symbol Change
   useEffect(() => {

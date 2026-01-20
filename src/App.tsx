@@ -197,7 +197,7 @@ export default function App() {
     }
   };
 
-  // --- 3. TRADING ACTIONS ---
+// --- 3. TRADING ACTIONS ---
 
   const handleTrade = async (newOrder: Order) => {
     if (!activeAccount || !session?.user) return;
@@ -206,6 +206,17 @@ export default function App() {
         alert("Insufficient Room Balance");
         return;
     }
+
+    // 1. OPTIMISTIC UPDATE: Add to UI immediately so it feels instant
+    const tempId = Date.now();
+    const optimisticOrder: Order = {
+      ...newOrder,
+      id: tempId,
+      status: 'pending' // Mark as pending for visual feedback
+    };
+    
+    setOrders(prev => [optimisticOrder, ...prev]);
+    setLastOrderTime(Date.now());
 
     try {
         const { data, error } = await supabase.functions.invoke('trade-engine', {
@@ -226,18 +237,37 @@ export default function App() {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
 
-        await fetchData(); 
-        await refreshAccountBalance(); 
-        setLastOrderTime(Date.now()); 
+        // 2. SUCCESS: Replace the temporary "fake" order with the real one from the database
+        await refreshAccountBalance();
+        const confirmedOrder: Order = {
+            id: data.trade.id, 
+            account_id: data.trade.account_id, 
+            symbol: data.trade.symbol, 
+            type: data.trade.type, 
+            entryPrice: data.trade.entry_price, 
+            size: data.trade.size, 
+            leverage: data.trade.leverage, 
+            margin: data.trade.margin, 
+            status: 'active',
+            takeProfit: data.trade.take_profit,
+            stopLoss: data.trade.stop_loss, 
+            liquidationPrice: data.trade.liquidation_price || 0 
+        };
+
+        setOrders(prev => prev.map(o => o.id === tempId ? confirmedOrder : o));
 
     } catch (err: any) {
+        // 3. FAIL: Remove the optimistic order if the server rejected the trade
+        setOrders(prev => prev.filter(o => o.id !== tempId));
         console.error("Trade failed:", err);
         alert(`Order Failed: ${err.message || 'Unknown error'}`);
     }
   };
 
   const handleCloseOrder = async (orderId: number) => {
-    if (!session?.user) return;
+
+    // OPTIMISTIC CLOSE: Show as pending immediately so the user knows it's closing
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'pending' } : o));
 
     try {
         const { data, error } = await supabase.functions.invoke('trade-engine', {
@@ -250,12 +280,13 @@ export default function App() {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
 
+        // Success: Finalize the UI state
         await fetchData(); 
         await refreshAccountBalance(); 
         
-        console.log(`Position Closed. Realized PnL: ${data.pnl?.toFixed(2)}`);
-
     } catch (err: any) {
+        // Revert to 'active' if the close failed on the server
+        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'active' } : o));
         console.error("Close failed:", err);
         alert(`Close Failed: ${err.message || 'Unknown error'}`);
     }

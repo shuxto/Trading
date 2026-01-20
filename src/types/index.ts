@@ -31,7 +31,7 @@ export interface Order {
   leverage: number;
   size: number;
   liquidationPrice: number;
-  status: 'active' | 'closed' | 'open'; 
+  status: 'active' | 'closed' | 'open' | 'pending'; // ✅ Add 'pending'
   pnl?: number; 
   takeProfit?: number; 
   stopLoss?: number;   

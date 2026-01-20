@@ -6,11 +6,16 @@ export function useClock() {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      // Returns format like "14:30:45 (UTC+4)"
-      const timeString = now.toLocaleTimeString('en-GB', { hour12: false });
-      const offset = -now.getTimezoneOffset() / 60;
-      const offsetString = offset >= 0 ? `+${offset}` : `${offset}`;
-      setTime(`${timeString} (UTC${offsetString})`);
+      
+      // PROFESSIONAL FIX: Use 'UTC' timezone and 'en-GB' for 24-hour format
+      // This ignores your local computer settings and matches TradingView/Exchanges
+      const timeString = now.toLocaleTimeString('en-GB', { 
+        hour12: false, 
+        timeZone: 'UTC' 
+      });
+
+      // Always show (UTC) to let the trader know this is the global market time
+      setTime(`${timeString} (UTC)`);
     };
     
     updateTime(); 

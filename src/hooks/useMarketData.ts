@@ -27,75 +27,80 @@ export function useMarketData(asset: ActiveAsset, interval: string) {
     // ==========================================
     
     // 1. Fetch History (REST API)
-    const fetchHistory = async () => {
-      try {
-        const intervalMap: Record<string, string> = {
-          '1m': '1min',
-          '5m': '5min',
-          '15m': '15min',
-          '1h': '1h',
-          '4h': '4h',
-          '1d': '1day',
-        };
-        
-        const tdInterval = intervalMap[interval] || '1day';
-        
-        // Base URL
-        const baseUrl = `https://api.twelvedata.com/time_series?symbol=${asset.symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`;
+const fetchHistory = async () => {
+  try {
+    const intervalMap: Record<string, string> = {
+      '1m': '1min',
+      '5m': '5min',
+      '15m': '15min',
+      '1h': '1h',
+      '4h': '4h',
+      '1d': '1day',
+    };
 
-        // Check if Crypto (by type or symbol)
-        // We cast to 'any' because 'type' might be missing on the initial load default asset
-        const isCrypto = (asset as any).type === 'crypto' || 
-                         (asset.symbol.includes('/') && !asset.symbol.includes('USD') && !asset.symbol.includes('EUR'));
+    const tdInterval = intervalMap[interval] || '1day';
 
-        let data;
+    // Base URL
+    const baseUrl = `https://api.twelvedata.com/time_series?symbol=${asset.symbol}&interval=${tdInterval}&apikey=${TWELVE_DATA_API_KEY}&outputsize=5000`;
 
-        if (isCrypto) {
-            // 🛑 TRY 1: Attempt to fetch from BINANCE to get VOLUME
-            try {
-                const res = await fetch(`${baseUrl}&exchange=binance`);
-                data = await res.json();
-            } catch (e) {
-                data = { code: 400 }; // Force fallback on network error
-            }
+    // Check if Crypto
+    const isCrypto = (asset as any).type === 'crypto' || 
+                     (asset.symbol.includes('/') && !asset.symbol.includes('USD') && !asset.symbol.includes('EUR'));
 
-            // 🛑 TRY 2: If Binance failed (no values), Fallback to COMPOSITE (No Volume, but working Price)
-            if (!data.values) {
-                console.warn("Binance data missing, falling back to Composite feed...");
-                const res = await fetch(baseUrl);
-                data = await res.json();
-            }
-        } else {
-            // Standard fetch for Stocks/Forex
+    let data;
+
+    if (isCrypto) {
+        // TRY 1: Attempt to fetch from BINANCE to get VOLUME
+        try {
+            const res = await fetch(`${baseUrl}&exchange=binance`);
+            data = await res.json();
+        } catch (e) {
+            data = { code: 400 }; 
+        }
+
+        // TRY 2: Fallback to COMPOSITE
+        if (!data.values) {
+            console.warn("Binance data missing, falling back to Composite feed...");
             const res = await fetch(baseUrl);
             data = await res.json();
         }
+    } else {
+        // Standard fetch for Stocks/Forex
+        const res = await fetch(baseUrl);
+        data = await res.json();
+    }
 
-        if (data.values && Array.isArray(data.values) && assetRef.current.symbol === asset.symbol) {
-          const formatted: CandleData[] = data.values.reverse().map((d: any) => ({
-            time: (new Date(d.datetime).getTime() / 1000) as Time,
-            open: parseFloat(d.open),
-            high: parseFloat(d.high),
-            low: parseFloat(d.low),
-            close: parseFloat(d.close),
-            // Use 0 if volume is missing (Composite feed)
-            volume: parseFloat(d.volume || '0')
-          }));
-          
-          setCandles(formatted);
-          const last = formatted[formatted.length - 1];
-          setCurrentPrice(last.close);
-          setLastCandleTime(last.time);
-          setIsLoading(false);
-        } else {
-           console.warn("Twelve Data History Error:", data);
-           setIsLoading(false);
-        }
-      } catch (e) { 
-        console.error("Twelve Data Error", e);
-        setIsLoading(false);
-      }
-    };
+    if (data.values && Array.isArray(data.values) && assetRef.current.symbol === asset.symbol) {
+      const formatted: CandleData[] = data.values.reverse().map((d: any) => {
+        
+        // ✅ PRO FIX: Force the browser to read the datetime as UTC strictly
+        // We add "Z" to the string so the browser stops adding local hours.
+        const utcDate = new Date(d.datetime + "Z");
+
+        return {
+          time: (utcDate.getTime() / 1000) as Time,
+          open: parseFloat(d.open),
+          high: parseFloat(d.high),
+          low: parseFloat(d.low),
+          close: parseFloat(d.close),
+          volume: parseFloat(d.volume || '0')
+        };
+      });
+
+      setCandles(formatted);
+      const last = formatted[formatted.length - 1];
+      setCurrentPrice(last.close);
+      setLastCandleTime(last.time);
+      setIsLoading(false);
+    } else {
+       console.warn("Twelve Data History Error:", data);
+       setIsLoading(false);
+    }
+  } catch (e) { 
+    console.error("Twelve Data Error", e);
+    setIsLoading(false);
+  }
+};
 
     fetchHistory();
 

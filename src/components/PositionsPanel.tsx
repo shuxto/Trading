@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronUp, ChevronDown, X, Clock, AlertCircle } from "lucide-react"; // REMOVED unused 'History'
+import { ChevronUp, ChevronDown, X, Clock, AlertCircle } from "lucide-react"; 
 import { motion } from "framer-motion";
 import { useClock } from '../hooks/useClock';
 import type { Order } from "../types";
@@ -53,10 +53,22 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                           const isProfit = pnlValue >= 0;
 
                           return (
-                            <tr key={order.id} className="hover:bg-white/[0.02] transition-colors border-b border-[#2a2e39]/50">
+                            <tr 
+                              key={order.id} 
+                              className={`transition-colors border-b border-[#2a2e39]/50 ${
+                                order.status === 'pending' ? 'bg-[#21ce99]/5 animate-pulse' : 'hover:bg-white/[0.02]'
+                              }`}
+                            >
                                <td className="px-2 md:px-4 py-2 flex items-center gap-2">
                                   <span className="font-bold text-white">{order.symbol}</span>
                                   <span className="px-1 py-0.5 rounded bg-gray-800 text-[9px] text-gray-400 hidden sm:inline-block">{order.leverage}x</span>
+                                  
+                                  {/* ✅ PRO INDICATOR: Shows user the trade data instantly but notes it is syncing */}
+                                  {order.status === 'pending' && (
+                                    <span className="text-[8px] text-[#21ce99] font-black tracking-tighter animate-bounce px-1 bg-[#21ce99]/10 rounded">
+                                      SYNCING
+                                    </span>
+                                  )}
                                </td>
                                <td className={`px-2 md:px-4 py-2 font-bold ${order.type === 'buy' ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
                                   {order.type.toUpperCase()}
@@ -70,9 +82,14 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                                   <span className="text-[9px] md:text-[10px] opacity-70 ml-1 block sm:inline">({pnlPercent.toFixed(2)}%)</span>
                                </td>
                                <td className="px-2 md:px-4 py-2 text-center">
-                                  <button onClick={(e) => { e.stopPropagation(); onCloseOrder(order.id); }} className="p-1 hover:bg-[#2a2e39] rounded text-gray-500 hover:text-white transition-colors">
-                                      <X size={14} />
-                                  </button>
+                                  {order.status === 'pending' ? (
+                                    /* ✅ TINY SPINNER: Row keeps its shape while database finishes */
+                                    <div className="w-3 h-3 border-2 border-[#21ce99]/20 border-t-[#21ce99] rounded-full animate-spin mx-auto" />
+                                  ) : (
+                                    <button onClick={(e) => { e.stopPropagation(); onCloseOrder(order.id); }} className="p-1 hover:bg-[#2a2e39] rounded text-gray-500 hover:text-white transition-colors">
+                                        <X size={14} />
+                                    </button>
+                                  )}
                                </td>
                             </tr>
                           );
