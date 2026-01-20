@@ -12,7 +12,8 @@ import {
   type IChartApi, 
   CrosshairMode, 
   type Time, 
-  type LineWidth 
+  type LineWidth,
+  TickMarkType // ✅ ADDED THIS IMPORT
 } from 'lightweight-charts';
 import { TIMEFRAMES, RANGES } from '../constants/chartConfig';
 import ChartContextMenu from './ChartContextMenu';
@@ -82,7 +83,8 @@ export default function Chart({
     if (tf.locked) { onTriggerPremium(); return; }
     onTimeframeChange(tf.value); 
     setActiveRange(null);
-    pendingZoomBars.current = null; // Clear manual zoom
+    // ✅ TRADINGVIEW FIX: Zoom to the last 100 bars instead of showing everything
+    pendingZoomBars.current = 100; 
   };
 
   const handleRangeClick = (range: typeof RANGES[0]) => {
@@ -117,8 +119,8 @@ export default function Chart({
       symbol: displaySymbol,
       entryPrice: price,
       margin: 100,
-      leverage: 1, // <--- WAS 20
-      size: 100,   // <--- WAS 2000 (Matched to 1x leverage)
+      leverage: 1, 
+      size: 100,   
       liquidationPrice: 0, // Spot has no liquidation price (technically 0)
       status: 'active'
     };
@@ -130,64 +132,76 @@ export default function Chart({
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
-   // Find this section in src/components/Chart.tsx
-if (!chartRef.current) {
-  const chart = createChart(chartContainerRef.current, {
-    layout: { 
-      background: { type: ColorType.Solid, color: 'transparent' }, 
-      textColor: '#9ca3af', 
-      attributionLogo: false 
-    },
-    grid: { 
-      vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, 
-      horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } 
-    },
-    width: chartContainerRef.current.clientWidth,
-    height: chartContainerRef.current.clientHeight,
-    
-    // 1. FINAL SCALE SETTINGS
-    timeScale: { 
-      timeVisible: true, 
-      secondsVisible: false, 
-      borderColor: '#2a2e39', 
-      rightOffset: 12, 
-      barSpacing: 6,
-      shiftVisibleRangeOnNewBar: true,
-      // ✅ ADD THIS: Helps keep time labels consistent
-      uniformDistribution: true,
-      // ✅ FORCED AXIS LABELS:
-      tickMarkFormatter: (time: number) => {
-        const date = new Date(time * 1000);
-        return date.toLocaleTimeString('en-GB', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          timeZone: 'UTC',
-          hour12: false 
-        });
-      },
-    },
+    if (!chartRef.current) {
+      const chart = createChart(chartContainerRef.current, {
+        layout: { 
+          background: { type: ColorType.Solid, color: 'transparent' }, 
+          textColor: '#9ca3af', 
+          attributionLogo: false 
+        },
+        grid: { 
+          vertLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 }, 
+          horzLines: { color: 'rgba(255, 255, 255, 0.08)', style: 1 } 
+        },
+        width: chartContainerRef.current.clientWidth,
+        height: chartContainerRef.current.clientHeight,
+        
+        // 1. FINAL SCALE SETTINGS (SMART AXIS)
+        timeScale: { 
+          timeVisible: true, 
+          secondsVisible: false, 
+          borderColor: '#2a2e39', 
+          rightOffset: 12, 
+          barSpacing: 6,
+          shiftVisibleRangeOnNewBar: true,
+          uniformDistribution: true,
+          
+          // ✅ SMART FORMATTER: Decides whether to show Time, Day, Month, or Year
+          tickMarkFormatter: (time: number, tickMarkType: TickMarkType) => {
+            const date = new Date(time * 1000);
+            
+            switch (tickMarkType) {
+              case TickMarkType.Year:
+                return date.getUTCFullYear().toString();
+              
+              case TickMarkType.Month:
+                return date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+              
+              case TickMarkType.DayOfMonth:
+                return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+              
+              case TickMarkType.Time:
+                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC', hour12: false });
+              
+              case TickMarkType.TimeWithSeconds:
+                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', hour12: false });
+              
+              default:
+                return "";
+            }
+          },
+        },
 
-    // 2. FINAL LOCALIZATION
-    localization: {
-      locale: 'en-GB',
-      // ✅ FORCED CROSSHAIR BOX:
-      timeFormatter: (time: number) => {
-        const date = new Date(time * 1000);
-        return date.toLocaleTimeString('en-GB', { 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          timeZone: 'UTC',
-          hour12: false 
-        });
-      },
-    },
+        // 2. FINAL LOCALIZATION
+        localization: {
+          locale: 'en-GB',
+          // Default Crosshair (will be overridden by useEffect below)
+          timeFormatter: (time: number) => {
+            const date = new Date(time * 1000);
+            return date.toLocaleString('en-GB', { 
+              day: '2-digit', month: 'short',
+              hour: '2-digit', minute: '2-digit', 
+              timeZone: 'UTC', hour12: false 
+            });
+          },
+        },
 
-    rightPriceScale: { borderColor: 'transparent' },
-    crosshair: { mode: CrosshairMode.Normal },
-  });
+        rightPriceScale: { borderColor: 'transparent' },
+        crosshair: { mode: CrosshairMode.Normal },
+      });
 
-  chartRef.current = chart;
-  setChartApi(chart);
+      chartRef.current = chart;
+      setChartApi(chart);
 
       const handleResize = () => { if (chartContainerRef.current) chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight }); };
       window.addEventListener('resize', handleResize);
@@ -280,6 +294,45 @@ if (!chartRef.current) {
 
   }, [chartStyle]);
 
+  
+  // ✅ CROSSHAIR FORMATTER FIX (Separated from Axis Logic)
+  // This ensures the floating label (Crosshair) shows Date+Time for intraday, but just Date for Daily
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    const isDaily = activeTimeframe === '1d' || activeTimeframe === '1w';
+
+    chartRef.current.applyOptions({
+      localization: {
+        timeFormatter: (time: number) => {
+          const date = new Date(time * 1000);
+          
+          if (isDaily) {
+             // 1D/1W: Just Date (e.g., "20 Jan 2024")
+             return date.toLocaleDateString('en-GB', { 
+               day: '2-digit', 
+               month: 'short', 
+               year: 'numeric',
+               timeZone: 'UTC' 
+             });
+          }
+          
+          // 1m - 4h: Date + Time (e.g., "20 Jan 14:30")
+          return date.toLocaleString('en-GB', { 
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit', 
+            minute: '2-digit', 
+            timeZone: 'UTC',
+            hour12: false 
+          });
+        },
+      }
+      // Note: We do NOT set timeScale here anymore. It's handled by the Smart Switch in init.
+    });
+  }, [activeTimeframe]);
+
+
   // Auto-fit on Symbol Change
   useEffect(() => {
     if (prevSymbol.current !== symbol) {
@@ -320,23 +373,20 @@ if (!chartRef.current) {
          })));
       }
 
-      // ✅ SMART ZOOM: Only zoom if it's a new asset or pending zoom exists
+      // ✅ TRADINGVIEW SCALE FIX
       if ((isNewAsset.current || pendingZoomBars.current) && chartRef.current && candles.length > 0) {
           const totalBars = candles.length;
-          
-          // Use specific bars for ranges (e.g. 60 for 1H), or default to 70 for new assets
-          const visibleBars = pendingZoomBars.current || 70; 
+          const visibleBars = pendingZoomBars.current || 100; 
 
           if (totalBars > visibleBars) {
               chartRef.current.timeScale().setVisibleLogicalRange({
                   from: totalBars - visibleBars,
-                  to: totalBars + 5 // Small padding to right
+                  to: totalBars + 5 
               });
           } else {
               chartRef.current.timeScale().fitContent();
           }
           
-          // Clear flags
           isNewAsset.current = false;
           pendingZoomBars.current = null;
       }
@@ -387,7 +437,6 @@ if (!chartRef.current) {
     return () => cancelAnimationFrame(frameId);
   }, [currentPrice, lastCandleTime, chartStyle]);
 
-  // ✅ NEW: WELCOME SCREEN (If no symbol is selected)
   if (!symbol) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-[#151a21] relative z-20 animate-in fade-in">
@@ -413,7 +462,7 @@ if (!chartRef.current) {
     <div className="w-full h-full relative group bg-transparent overflow-hidden">
       <style>{`#tv-attr-logo, .tv-lightweight-charts-attribution { display: none !important; }`}</style>
 
-      {/* TIMEFRAMES (Hidden on Mobile) */}
+      {/* TIMEFRAMES */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 hidden md:flex gap-1 bg-[#151a21]/90 backdrop-blur-md p-1 rounded-lg border border-[#2a2e39] shadow-xl">
         {TIMEFRAMES.map((tf) => (
             <button 
@@ -479,7 +528,7 @@ if (!chartRef.current) {
         </div>
       )}
 
-      {/* RANGES (Hidden on Mobile + Moved to bottom-2) */}
+      {/* RANGES */}
       <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-30 hidden md:flex gap-2 bg-[#0b0e11]/80 backdrop-blur-sm p-1.5 rounded-full border border-[#2a2e39] opacity-50 hover:opacity-100 transition-opacity">
         {RANGES.map((r) => (
             <button key={r.label} onClick={() => handleRangeClick(r)} className={`text-[9px] font-bold px-3 py-1 rounded-full transition-all ${activeRange === r.label ? 'bg-[#21ce99] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}>
@@ -502,7 +551,6 @@ if (!chartRef.current) {
         onCloseOrder={onCloseOrder}
       />
       
-      {/* Pulsing Dot */}
       <div ref={dotRef} className="absolute top-0 left-0 w-3 h-3 bg-white rounded-full z-40 pointer-events-none transition-transform duration-75" style={{ display: 'none', boxShadow: '0 0 10px #21ce99' }}></div>
 
       {menuState.visible && (
