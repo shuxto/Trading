@@ -4,9 +4,8 @@ import { supabase } from '../lib/supabase';
 import { io } from "socket.io-client"; // 👈 New Import
 import type { CandleData, ActiveAsset } from '../types';
 
-// ⚠️ STEP 5: You will paste your Railway URL here later
-// For now, leave it or use localhost if testing
-const RAILWAY_URL = "https://YOUR-NEW-RAILWAY-APP-URL.up.railway.app"; 
+// ⚠️ STEP 5: Railway URL here later
+const RAILWAY_URL = "https://trading-production-169d.up.railway.app"; 
 
 export function useMarketData(asset: ActiveAsset, interval: string) {
   const [candles, setCandles] = useState<CandleData[]>([]);
@@ -76,7 +75,7 @@ export function useMarketData(asset: ActiveAsset, interval: string) {
   useEffect(() => {
     if (!asset.symbol) return;
 
-    // Connect to your new Railway Radio
+    // Connect to new Railway Radio
     const socket = io(RAILWAY_URL);
 
     socket.on('connect', () => {
