@@ -1,4 +1,4 @@
-// scripts/broadcaster.js (The "Force Port 3000" Version)
+// scripts/broadcaster.js (The Railway-Safe Version)
 import { createServer } from "http";
 import { Server } from "socket.io";
 import WebSocket from 'ws';
@@ -62,8 +62,9 @@ function connectTwelveData() {
 connectTwelveData();
 
 // 🛑 THE FIX IS HERE:
-// We Force Port 3000 to match your Railway Settings
-const PORT = 3000; 
+// We use the Port Railway gives us (process.env.PORT)
+// If Railway gives nothing, we default to 3000.
+const PORT = process.env.PORT || 3000; 
 
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Broadcasting Live on Port ${PORT}`);
