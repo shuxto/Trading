@@ -31,7 +31,10 @@ export default function BankingTab() {
   // Form State
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const [amount, setAmount] = useState('');
-  const [direction, setDirection] = useState<'to_room' | 'to_main'>('to_room');
+  
+  // 🟢 FIX 1: Use the exact words the Database expects ('deposit' or 'withdraw')
+  const [direction, setDirection] = useState<'deposit' | 'withdraw'>('deposit');
+  
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -51,7 +54,13 @@ export default function BankingTab() {
     const { data: rooms } = await supabase.from('trading_accounts').select('*').eq('user_id', user.id).order('created_at');
     if (rooms) {
         setAccounts(rooms);
+        // If we have accounts but none selected, select the first one
         if (!selectedAccount && rooms.length > 0) setSelectedAccount(rooms[0]);
+        // If we already had one selected, make sure to update its balance from the fresh data
+        else if (selectedAccount) {
+            const updated = rooms.find(r => r.id === selectedAccount.id);
+            if (updated) setSelectedAccount(updated);
+        }
     }
 
     // 3. Get Transaction History
@@ -85,17 +94,18 @@ export default function BankingTab() {
 
     setLoading(true);
     try {
+        // 🟢 FIX 2: Send the 'direction' (deposit/withdraw) correctly
         const { error } = await supabase.rpc('transfer_funds', {
             p_room_id: selectedAccount.id,
             p_amount: val,
-            p_direction: direction
+            p_direction: direction 
         });
 
         if (error) throw error;
         
         setAmount('');
-        fetchData(); 
-        alert("Transfer Successful");
+        await fetchData(); // Refresh data to show new balance immediately
+        alert("Transfer Successful! 🚀");
     } catch (err: any) {
         alert("Transfer Failed: " + err.message);
     } finally {
@@ -192,18 +202,18 @@ export default function BankingTab() {
                   </div>
 
                   <div className="mb-4">
-                     <p className="text-xs text-[#8b9bb4] mb-4 leading-relaxed">
+                      <p className="text-xs text-[#8b9bb4] mb-4 leading-relaxed">
                         {activeSection === 'deposit' 
                           ? "Enter the amount you wish to deposit. Your request will be reviewed by our financial team."
                           : "Enter the amount to withdraw. Funds will be deducted from your Main Wallet upon approval."}
-                     </p>
-                     <input 
+                      </p>
+                      <input 
                         type="number" 
                         value={amount} 
                         onChange={(e) => setAmount(e.target.value)}
                         placeholder="Amount (USD)" 
                         className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl p-4 text-white font-mono font-bold focus:border-[#21ce99] outline-none"
-                     />
+                      />
                   </div>
 
                   <button 
@@ -215,7 +225,7 @@ export default function BankingTab() {
                         : 'bg-[#f23645] text-white hover:bg-[#d12c39]'
                     }`}
                   >
-                     {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : `Submit ${activeSection === 'deposit' ? 'Deposit' : 'Withdrawal'} Request`}
+                      {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : `Submit ${activeSection === 'deposit' ? 'Deposit' : 'Withdrawal'} Request`}
                   </button>
               </div>
           ) : (
@@ -231,16 +241,17 @@ export default function BankingTab() {
                       </div>
                   </div>
 
+                  {/* 🟢 FIX 3: Update Buttons to set 'deposit' or 'withdraw' */}
                   <div className="flex items-center justify-between bg-[#151a21] p-1 rounded-xl mb-3">
                       <button 
-                          onClick={() => setDirection('to_room')}
-                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${direction === 'to_room' ? 'bg-[#21ce99] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}
+                          onClick={() => setDirection('deposit')}
+                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${direction === 'deposit' ? 'bg-[#21ce99] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}
                       >
                           Main ➔ Room
                       </button>
                       <button 
-                          onClick={() => setDirection('to_main')}
-                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${direction === 'to_main' ? 'bg-[#F0B90B] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}
+                          onClick={() => setDirection('withdraw')}
+                          className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${direction === 'withdraw' ? 'bg-[#F0B90B] text-[#0b0e11]' : 'text-[#5e6673] hover:text-white'}`}
                       >
                           Room ➔ Main
                       </button>
@@ -270,7 +281,7 @@ export default function BankingTab() {
                                       onClick={() => { setSelectedAccount(acc); setIsDropdownOpen(false); }}
                                       className="w-full text-left p-3 hover:bg-[#2a303c] flex items-center justify-between border-b border-[#2a2e39] last:border-0"
                                   >
-                                      <span className="text-sm font-bold text-gray-300">{acc.name}</span>
+                                      <span className="text-sm font-bold text-gray-300">{acc.name || 'Trading Room ' + acc.id.slice(0,4)}</span>
                                       <span className="text-xs font-mono text-[#21ce99]">${acc.balance?.toLocaleString()}</span>
                                   </button>
                               ))}
@@ -330,7 +341,7 @@ export default function BankingTab() {
                      <td className="p-4">
                         <div className="flex items-center gap-3">
                            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                             tx.type === 'deposit' ? 'bg-[#21ce99]/20 text-[#21ce99]' : 'bg-[#f23645]/20 text-[#f23645]'
+                            tx.type === 'deposit' ? 'bg-[#21ce99]/20 text-[#21ce99]' : 'bg-[#f23645]/20 text-[#f23645]'
                            }`}>
                              {tx.type === 'deposit' ? <ArrowDownLeft size={14}/> : <ArrowUpRight size={14}/>}
                            </div>
