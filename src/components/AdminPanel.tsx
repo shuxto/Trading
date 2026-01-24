@@ -38,7 +38,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     type: 'warning' as 'warning' | 'success' | 'danger',
     onConfirm: undefined as (() => void) | undefined,
     confirmText: 'Confirm',
-    isLoading: false // ✅ ADDED LOADING STATE
+    isLoading: false
   });
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
   };
 
-  // ✅ HELPER: Open Confirmation Modal WITH ERROR HANDLING
+  // HELPER: Open Confirmation Modal WITH ERROR HANDLING
   const confirmAction = (title: string, desc: string, type: 'warning' | 'danger' | 'success', action: () => Promise<void>) => {
     setModal({
       isOpen: true,
@@ -71,15 +71,15 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       confirmText: 'Confirm',
       isLoading: false,
       onConfirm: async () => {
-         // 1. START LOADING
-         setModal(prev => ({ ...prev, isLoading: true }));
-         
-         try {
-           // 2. TRY THE ACTION
-           await action();
-           
-           // 3. IF SUCCESSFUL
-           setModal({ 
+          // 1. START LOADING
+          setModal(prev => ({ ...prev, isLoading: true }));
+          
+          try {
+            // 2. TRY THE ACTION
+            await action();
+            
+            // 3. IF SUCCESSFUL
+            setModal({ 
               isOpen: true, 
               title: 'Success', 
               description: 'Operation completed successfully.', 
@@ -87,12 +87,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               confirmText: 'Awesome',
               isLoading: false,
               onConfirm: undefined 
-           });
-           fetchData(); // Refresh list
-         } catch (error: any) {
-           // 4. IF FAILED (Catch the error so the button doesn't freeze!)
-           console.error("Admin Action Failed:", error);
-           setModal({ 
+            });
+            fetchData(); // Refresh list
+          } catch (error: any) {
+            // 4. IF FAILED
+            console.error("Admin Action Failed:", error);
+            setModal({ 
               isOpen: true, 
               title: 'Error', 
               description: error.message || 'Action failed. Check database policies.', 
@@ -100,8 +100,8 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               confirmText: 'Close',
               isLoading: false,
               onConfirm: undefined 
-           });
-         }
+            });
+          }
       }
     });
   };
@@ -147,16 +147,28 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     });
   };
 
+  // 🚀 FIXED: Uses Edge Function to bypass RLS
   const handleVerifyUser = (userId: string) => {
     confirmAction("Verify User Identity?", "This user will be granted full access.", "success", async () => {
-        const { error } = await supabase.from('profiles').update({ kyc_status: 'verified' }).eq('id', userId);
+        const { error } = await supabase.functions.invoke('update-user', {
+            body: { 
+                targetUserId: userId, 
+                updates: { status: 'verified', kyc_status: 'verified' } 
+            }
+        });
         if (error) throw error;
     });
   };
 
+  // 🚀 FIXED: Uses Edge Function to bypass RLS
   const handleRejectUser = (userId: string) => {
     confirmAction("Reject User Verification?", "This will mark the user's KYC as rejected.", "danger", async () => {
-        const { error } = await supabase.from('profiles').update({ kyc_status: 'rejected' }).eq('id', userId);
+        const { error } = await supabase.functions.invoke('update-user', {
+            body: { 
+                targetUserId: userId, 
+                updates: { kyc_status: 'rejected' } 
+            }
+        });
         if (error) throw error;
     });
   };
@@ -181,7 +193,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         description={modal.description}
         type={modal.type}
         confirmText={modal.confirmText}
-        isLoading={modal.isLoading} // ✅ Pass loading state
+        isLoading={modal.isLoading}
       />
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#151a21] border-r border-[#2a2e39] transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>

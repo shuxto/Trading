@@ -1,17 +1,26 @@
-// scripts/broadcaster.js (The FREE Version)
+// scripts/broadcaster.js (The ROBUST Version)
+import { createServer } from "http";
 import { Server } from "socket.io";
 import WebSocket from 'ws';
 
-// 1. Create the Free Radio Station (Socket.io)
-// This listens on the port Railway gives us
-const io = new Server(process.env.PORT || 3000, {
-  cors: { origin: "*" } // Allow your frontend to listen from anywhere
+// 1. Create a basic HTTP Server
+// This is required for Railway to "see" your app correctly
+const httpServer = createServer((req, res) => {
+  res.writeHead(200);
+  res.end("Radio Tower is Online 🟢");
 });
 
-// ⚠️ KEEP YOUR EXISTING KEY
+// 2. Attach Socket.io to that HTTP Server
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*", // Allow connections from ANYWHERE (voidnet.app, localhost, etc.)
+    methods: ["GET", "POST"]
+  }
+});
+
+// ⚠️ YOUR KEY
 const TD_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
 
-// Top 30 Assets (Same list as before)
 const SYMBOLS = [
     "BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "DOGE/USD", 
     "ADA/USD", "AVAX/USD", "MATIC/USD", "DOT/USD", "LTC/USD", "SHIB/USD",
@@ -36,8 +45,6 @@ function connectTwelveData() {
         try {
             const msg = JSON.parse(data);
             if (msg.event === 'price') {
-                // 🚀 THE FIX: Send to Socket.io (Free) instead of Supabase ($$$)
-                // We transmit directly to the airwaves. No database involved.
                 io.emit('price_update', { 
                     symbol: msg.symbol, 
                     price: parseFloat(msg.price) 
@@ -57,4 +64,9 @@ function connectTwelveData() {
 }
 
 connectTwelveData();
-console.log("🚀 Broadcasting Live on Port " + (process.env.PORT || 3000));
+
+// 3. LISTEN on 0.0.0.0 (Important for Railway!)
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Broadcasting Live on Port ${PORT}`);
+});
