@@ -1,13 +1,17 @@
-// scripts/broadcaster.js
-import { createClient } from '@supabase/supabase-js';
+// scripts/broadcaster.js (The FREE Version)
+import { Server } from "socket.io";
 import WebSocket from 'ws';
 
-// 🛑 DOUBLE CHECK THESE ARE REAL KEYS
-const TD_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
-const SUPABASE_URL = "https://zqvvytgglralkoiuhqor.supabase.co"; 
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxdnZ5dGdnbHJhbGtvaXVocW9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3Mzk0ODcsImV4cCI6MjA4MzMxNTQ4N30.3Kx0bJUcy_IK-7EPhgvl_c8moLmJhbarqQtB246etqk"; // <--- ⚠️  HERE!!!
+// 1. Create the Free Radio Station (Socket.io)
+// This listens on the port Railway gives us
+const io = new Server(process.env.PORT || 3000, {
+  cors: { origin: "*" } // Allow your frontend to listen from anywhere
+});
 
-// Top 30 Assets
+// ⚠️ KEEP YOUR EXISTING KEY
+const TD_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
+
+// Top 30 Assets (Same list as before)
 const SYMBOLS = [
     "BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "DOGE/USD", 
     "ADA/USD", "AVAX/USD", "MATIC/USD", "DOT/USD", "LTC/USD", "SHIB/USD",
@@ -16,64 +20,41 @@ const SYMBOLS = [
     "GOOGL", "META", "NFLX", "AMD", "COIN", "GME", "AMC"
 ];
 
-if (SUPABASE_KEY.includes("YOUR_SUPABASE")) {
-    console.error("❌ CRITICAL ERROR: You forgot to paste the Supabase Key!");
-    process.exit(1);
-}
+console.log("[Tower] 🟡 Starting Radio Tower...");
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 let ws;
 
-console.log("[Tower] 🟡 Attempting to connect to Supabase...");
-
-const channel = supabase.channel('market_prices');
-
-channel.subscribe((status, err) => {
-    // 🔍 LOG EVERY STATUS CHANGE
-    console.log(`[Tower] Supabase Status Change: ${status}`);
-
-    if (status === 'SUBSCRIBED') {
-        console.log('[Tower] 🟢 Supabase Ready! Connecting to Twelve Data...');
-        connectTwelveData();
-    } 
-    
-    if (status === 'CHANNEL_ERROR') {
-        console.error(`[Tower] 🔴 Supabase Connection Failed. Error:`, err);
-        console.error(`[Tower] ⚠️ CHECK YOUR SUPABASE KEY.`);
-    }
-
-    if (status === 'TIMED_OUT') {
-        console.error(`[Tower] 🔴 Supabase Timed Out. Retrying...`);
-    }
-});
-
 function connectTwelveData() {
-    if (ws) return;
     ws = new WebSocket(`wss://ws.twelvedata.com/v1/quotes/price?apikey=${TD_API_KEY}`);
 
     ws.on('open', () => {
-        console.log(`[Tower] ✅ Twelve Data Connected! Streaming...`);
+        console.log("[Tower] ✅ Connected to Market Source");
         ws.send(JSON.stringify({ action: "subscribe", params: { symbols: SYMBOLS.join(',') } }));
     });
 
-    ws.on('message', async (data) => {
+    ws.on('message', (data) => {
         try {
             const msg = JSON.parse(data);
             if (msg.event === 'price') {
-                await channel.send({
-                    type: 'broadcast',
-                    event: 'price_update',
-                    payload: { symbol: msg.symbol, price: parseFloat(msg.price) }
+                // 🚀 THE FIX: Send to Socket.io (Free) instead of Supabase ($$$)
+                // We transmit directly to the airwaves. No database involved.
+                io.emit('price_update', { 
+                    symbol: msg.symbol, 
+                    price: parseFloat(msg.price) 
                 });
             }
-        } catch (e) {}
+        } catch (e) {
+            // Ignore heartbeat messages
+        }
     });
 
     ws.on('close', () => {
-        console.log('[Tower] 🔴 Twelve Data Closed. Reconnecting in 3s...');
-        ws = null;
+        console.log('[Tower] 🔴 Source Closed. Reconnecting...');
         setTimeout(connectTwelveData, 3000);
     });
     
-    ws.on('error', (err) => console.error('[Tower] Twelve Data Error:', err.message));
+    ws.on('error', (err) => console.error('[Tower] Error:', err.message));
 }
+
+connectTwelveData();
+console.log("🚀 Broadcasting Live on Port " + (process.env.PORT || 3000));
