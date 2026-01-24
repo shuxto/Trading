@@ -1,24 +1,22 @@
-// scripts/broadcaster.js (The ROBUST Version)
+// scripts/broadcaster.js (The "Force Port 3000" Version)
 import { createServer } from "http";
 import { Server } from "socket.io";
 import WebSocket from 'ws';
 
-// 1. Create a basic HTTP Server
-// This is required for Railway to "see" your app correctly
+// 1. Create the HTTP Server
 const httpServer = createServer((req, res) => {
   res.writeHead(200);
   res.end("Radio Tower is Online 🟢");
 });
 
-// 2. Attach Socket.io to that HTTP Server
+// 2. Attach Socket.io
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow connections from ANYWHERE (voidnet.app, localhost, etc.)
+    origin: "*", // Allow connections from ANYWHERE
     methods: ["GET", "POST"]
   }
 });
 
-// ⚠️ YOUR KEY
 const TD_API_KEY = "05e7f5f30b384f11936a130f387c4092"; 
 
 const SYMBOLS = [
@@ -50,9 +48,7 @@ function connectTwelveData() {
                     price: parseFloat(msg.price) 
                 });
             }
-        } catch (e) {
-            // Ignore heartbeat messages
-        }
+        } catch (e) { }
     });
 
     ws.on('close', () => {
@@ -65,8 +61,10 @@ function connectTwelveData() {
 
 connectTwelveData();
 
-// 3. LISTEN on 0.0.0.0 (Important for Railway!)
-const PORT = process.env.PORT || 3000;
+// 🛑 THE FIX IS HERE:
+// We Force Port 3000 to match your Railway Settings
+const PORT = 3000; 
+
 httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Broadcasting Live on Port ${PORT}`);
 });
