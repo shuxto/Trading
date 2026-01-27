@@ -42,15 +42,17 @@ export default function LoginPage() {
       } else {
         // --- REGISTER LOGIC ---
         const { error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: cleanPassword,
-          options: {
-            data: {
-              role: 'user', // Default role
-              balance: 10000, // Starting Demo Balance
-            },
-          },
-        });
+  email: cleanEmail,
+  password: cleanPassword,
+  options: {
+    data: {
+      role: 'user',
+      balance: 0,
+      // ✅ ADD THIS LINE:
+      kyc_status: 'unverified' 
+    },
+  },
+});
         if (error) throw error;
         else {
           alert("Registration Successful! You can now log in.");

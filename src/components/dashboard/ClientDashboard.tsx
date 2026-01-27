@@ -47,7 +47,7 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
            .eq('id', user.id)
            .single();
         
-        setKycStatus(profile?.kyc_status || 'pending');
+        setKycStatus(profile?.kyc_status || 'unverified');
       }
       setLoading(false);
     };
