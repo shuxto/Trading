@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react' // ✅ Added useRef
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
+import { io } from "socket.io-client"; // 👈 NEW IMPORT
 
 // COMPONENTS
 import LoginPage from './components/LoginPage'
@@ -18,6 +19,9 @@ import PositionsPanel from './components/PositionsPanel'
 import { useMarketData } from './hooks/useMarketData' 
 import { type Order, type ActiveAsset, type ChartStyle, type TradingAccount } from './types'
 
+// ⚠️ GLOBAL SOCKET URL
+const RAILWAY_URL = "https://trading-production-169d.up.railway.app"; 
+
 // ✅ DEFAULT ASSET FALLBACK (Now with type!)
 const DEFAULT_ASSET: ActiveAsset & { type: string } = { 
   symbol: 'BTC/USD', 
@@ -35,7 +39,7 @@ export default function App() {
   // VIEW STATE
   const [currentView, setCurrentView] = useState<'portal' | 'trading'>('portal');
   const [activeAccount, setActiveAccount] = useState<TradingAccount | null>(null);
-  const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]); // ✅ Added to store accounts for the switcher
+  const [userAccounts, setUserAccounts] = useState<TradingAccount[]>([]);
 
   // TRADING STATE
   const [orders, setOrders] = useState<Order[]>([])
@@ -53,20 +57,48 @@ export default function App() {
   const [accountBalance, setAccountBalance] = useState(0); 
   
   // ✅ PERSISTENT ASSET STATE
-  // 1. Initialize from LocalStorage
   const [activeAsset, setActiveAsset] = useState<ActiveAsset>(() => {
     const saved = localStorage.getItem('lastActiveAsset');
     return saved ? JSON.parse(saved) : DEFAULT_ASSET;
   });
 
-  // 2. Save to LocalStorage whenever activeAsset changes
   useEffect(() => {
     localStorage.setItem('lastActiveAsset', JSON.stringify(activeAsset));
   }, [activeAsset]);
 
   const [timeframe, setTimeframe] = useState('1m');
 
+  // Chart Data Hook (Still needed for the Chart itself)
   const { candles, currentPrice, lastCandleTime, isLoading } = useMarketData(activeAsset, timeframe);
+
+  // ------------------------------------------------------------
+  // ✅ FIX START: GLOBAL MARKET PRICES (THE BRAIN)
+  // ------------------------------------------------------------
+  
+  // 1. Store prices for ALL symbols here
+  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
+
+  // 2. Listen to Railway for ALL price updates
+  useEffect(() => {
+    const socket = io(RAILWAY_URL);
+
+    socket.on('price_update', (update: any) => {
+        if (update && update.symbol && update.price) {
+            setMarketPrices(prev => ({
+                ...prev,
+                [update.symbol]: parseFloat(update.price)
+            }));
+        }
+    });
+
+    return () => {
+        socket.disconnect();
+    };
+  }, []); // Run once on mount
+
+  // ------------------------------------------------------------
+  // ✅ FIX END
+  // ------------------------------------------------------------
 
   // --- 1. AUTH & INITIALIZATION ---
   useEffect(() => {
@@ -75,7 +107,7 @@ export default function App() {
       if (session) {
         checkUser(session.user.id);
         checkUrlParams(session.user.id);
-        fetchUserAccounts(session.user.id); // ✅ Fetch accounts for the header switcher
+        fetchUserAccounts(session.user.id); 
       } else {
         setAuthLoading(false);
       }
@@ -85,7 +117,7 @@ export default function App() {
       setSession(session);
       if (session) {
         checkUser(session.user.id);
-        fetchUserAccounts(session.user.id); // ✅ Fetch accounts on auth change
+        fetchUserAccounts(session.user.id); 
       } else {
         setRole(null);
         setAuthLoading(false);
@@ -95,7 +127,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ✅ New function to fetch all accounts belonging to the user
   const fetchUserAccounts = async (userId: string) => {
     const { data } = await supabase
       .from('trading_accounts')
@@ -298,45 +329,51 @@ export default function App() {
     }
   };
 
-  // ✅ 4. AUTO-CLOSE ENGINE (FRONTEND SIMULATION)
+  // ✅ 4. AUTO-CLOSE ENGINE (FIXED & SAFER)
+  // Now uses 'marketPrices' instead of 'currentPrice'
   const closingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
-    if (!currentPrice || orders.length === 0) return;
+    if (orders.length === 0) return;
 
     orders.forEach(order => {
         if (order.status !== 'active') return;
         if (closingRef.current.has(order.id)) return; 
 
+        // 🟢 THE FIX: Lookup the price for THIS SPECIFIC ORDER'S SYMBOL
+        const livePrice = marketPrices[order.symbol]; 
+        
+        // If we don't have a price for this coin yet, skip it safely
+        if (!livePrice) return; 
+
         let shouldClose = false;
         let reason = '';
 
         if (order.leverage > 1) { 
-            if (order.type === 'buy' && currentPrice <= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
-            if (order.type === 'sell' && currentPrice >= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
+            if (order.type === 'buy' && livePrice <= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
+            if (order.type === 'sell' && livePrice >= order.liquidationPrice) { shouldClose = true; reason = 'LIQUIDATION'; }
         }
 
         if (order.takeProfit) {
-            if (order.type === 'buy' && currentPrice >= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
-            if (order.type === 'sell' && currentPrice <= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+            if (order.type === 'buy' && livePrice >= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
+            if (order.type === 'sell' && livePrice <= order.takeProfit) { shouldClose = true; reason = 'TAKE PROFIT'; }
         }
 
         if (order.stopLoss) {
-            if (order.type === 'buy' && currentPrice <= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
-            if (order.type === 'sell' && currentPrice >= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
+            if (order.type === 'buy' && livePrice <= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
+            if (order.type === 'sell' && livePrice >= order.stopLoss) { shouldClose = true; reason = 'STOP LOSS'; }
         }
 
       if (shouldClose) {
-    // ⬇️ ADD THIS ONE LINE ⬇️
-    console.log("Closing trade reason:", reason); 
+        console.log(`Closing trade #${order.id} (${order.symbol}) Reason: ${reason} Price: ${livePrice}`); 
 
-    closingRef.current.add(order.id); 
-    handleCloseOrder(order.id).finally(() => {
-        closingRef.current.delete(order.id);
+        closingRef.current.add(order.id); 
+        handleCloseOrder(order.id).finally(() => {
+            closingRef.current.delete(order.id);
+        });
+      }
     });
-}
-    });
-  }, [currentPrice, orders]);
+  }, [marketPrices, orders]); // 👈 Depends on marketPrices now
 
 
   // --- 5. RENDER ---
@@ -356,22 +393,22 @@ export default function App() {
       <WorldMap />
       
       <Header 
-  activeAsset={activeAsset} 
-  balance={accountBalance} 
-  activeAccountName={activeAccount?.name}
-  userAccounts={userAccounts} // 👈 JUST ADD THIS LINE
-  onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
-  onOpenDashboardPopup={() => {
-      window.history.pushState({}, '', window.location.origin);
-      setCurrentView('portal');
-      setActiveAccount(null);
-  }} 
-  onOpenProfilePage={() => {
-      window.history.pushState({}, '', window.location.origin);
-      setCurrentView('portal');
-      setActiveAccount(null);
-  }}
-/>
+        activeAsset={activeAsset} 
+        balance={accountBalance} 
+        activeAccountName={activeAccount?.name}
+        userAccounts={userAccounts} 
+        onOpenAssetSelector={() => setIsAssetSelectorOpen(true)} 
+        onOpenDashboardPopup={() => {
+            window.history.pushState({}, '', window.location.origin);
+            setCurrentView('portal');
+            setActiveAccount(null);
+        }} 
+        onOpenProfilePage={() => {
+            window.history.pushState({}, '', window.location.origin);
+            setCurrentView('portal');
+            setActiveAccount(null);
+        }}
+      />
       
       <div className="flex-1 flex min-h-0 relative z-10 pb-[40px]">
         <Sidebar 
@@ -409,6 +446,7 @@ export default function App() {
         orders={orders} 
         history={history} 
         currentPrice={currentPrice} 
+        marketPrices={marketPrices} // 👈 PASSING THE GLOBAL PRICES HERE
         onCloseOrder={handleCloseOrder} 
         lastOrderTime={lastOrderTime} 
       />

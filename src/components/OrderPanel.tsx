@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, ChevronUp, ChevronDown, Loader2 } from "lucide-react"; 
+import { Wallet, ChevronUp, ChevronDown, Loader2, Zap, Settings2, Target, Shield } from "lucide-react"; 
 import { useClickSound } from '../hooks/useClickSound';
 import type { Order } from '../types';
 
@@ -49,8 +49,6 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
     const suggestedTp = side === 'buy' ? price * 1.05 : price * 0.95;
     const suggestedSl = side === 'buy' ? price * 0.95 : price * 1.05;
 
-    // We only update the state if the user HAS NOT typed something manual 
-    // or if the current value is invalid for the side they just clicked.
     setTpPrice(suggestedTp.toFixed(2));
     setSlPrice(suggestedSl.toFixed(2));
   };
@@ -61,6 +59,13 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       forceDirectionUpdate('buy'); 
     }
   }, [price]);
+
+  // ⬇️⬇️⬇️ THIS IS THE FIX (Logic Preserved) ⬇️⬇️⬇️
+  useEffect(() => {
+     setTpPrice('');
+     setSlPrice('');
+  }, [activeSymbol]);
+  // ⬆️⬆️⬆️ END OF FIX ⬆️⬆️⬆️
 
   useEffect(() => {
     if (tradingMode === 'spot') {
@@ -147,86 +152,135 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
   return (
     <aside 
-      style={{ backgroundColor: 'rgb(21, 26, 33)' }} 
-      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col backdrop-blur-xl border-t md:border-t-0 md:border-l border-white/5 shadow-2xl transition-all duration-300 ease-in-out ${isMobileExpanded ? 'h-[520px]' : 'h-auto'} md:static md:w-[260px] md:h-full`}>
+      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-[#151a21] border-t md:border-t-0 md:border-l border-white/10 shadow-2xl transition-all duration-300 ease-in-out ${isMobileExpanded ? 'h-[580px]' : 'h-auto'} md:static md:w-[280px] md:h-full font-sans`}
+    >
       
-      <div className="flex md:hidden items-center justify-center py-2 cursor-pointer" onClick={() => setIsMobileExpanded(!isMobileExpanded)}>
+      {/* MOBILE TOGGLE */}
+      <div className="flex md:hidden items-center justify-center py-3 cursor-pointer bg-[#191f2e] border-b border-white/5" onClick={() => setIsMobileExpanded(!isMobileExpanded)}>
         <div className="w-12 h-1 bg-gray-600 rounded-full"></div>
         <div className="absolute right-4 text-gray-500">{isMobileExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}</div>
       </div>
 
-      <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5 ${isMobileExpanded ? 'block' : 'hidden'} md:block`}>
+      <div className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 ${isMobileExpanded ? 'block' : 'hidden'} md:block`}>
+        
+        {/* HEADER */}
+        <div className="flex items-center gap-2 mb-2">
+            <Settings2 size={16} className="text-[#21ce99]" />
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Order Configuration</span>
+        </div>
+
         {/* TABS */}
-        <div className="flex p-1 bg-black/40 rounded-xl border border-white/5">
-          <button onClick={() => { playClick(); setTradingMode('spot'); }} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all relative z-10 ${tradingMode === 'spot' ? 'text-white' : 'text-gray-500'}`}>
-            SPOT {tradingMode === 'spot' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#2a2e39] rounded-lg -z-10 border border-white/10" />}
+        <div className="flex p-1 bg-[#0b0e11] rounded-xl border border-white/10">
+          <button onClick={() => { playClick(); setTradingMode('spot'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all z-10 ${tradingMode === 'spot' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
+            {tradingMode === 'spot' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#21ce99] rounded-lg shadow-[0_0_15px_rgba(33,206,153,0.4)] -z-10" />}
+            SPOT
           </button>
-          <button onClick={() => { playClick(); setTradingMode('futures'); }} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all relative z-10 flex items-center justify-center gap-1 ${tradingMode === 'futures' ? 'text-[#F0B90B]' : 'text-gray-500'}`}>
-            FUTURES {tradingMode === 'futures' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#2a2e39] rounded-lg -z-10 border border-[#F0B90B]/20" />}
+          <button onClick={() => { playClick(); setTradingMode('futures'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all z-10 ${tradingMode === 'futures' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
+            {tradingMode === 'futures' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#F0B90B] rounded-lg shadow-[0_0_15px_rgba(240,185,11,0.4)] -z-10" />}
+            FUTURES
           </button>
         </div>
 
-        {/* LEVERAGE */}
-        <AnimatePresence>
-          {tradingMode === 'futures' ? (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="bg-white/5 rounded-xl p-3 border border-white/5">
-              <div className="flex justify-between mb-2">
-                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Leverage</span>
-                <span className="text-xs font-black text-[#F0B90B]">{leverage}x</span>
-              </div>
-              <input type="range" min="1" max="125" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer accent-[#F0B90B]" />
-            </motion.div>
-          ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-[#21ce99]/10 border border-[#21ce99]/20 rounded-xl text-center">
-                <span className="text-[10px] font-bold text-[#21ce99] uppercase">Pro Spot Mode Active</span>
-                <p className="text-[9px] text-gray-400 mt-1">Auto-Protect enabled. <br/>TP: +20% | SL: -10%</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* LEVERAGE & MODE DISPLAY */}
+        {/* Added min-h to prevent jumping */}
+        <div className="min-h-[70px]">
+            <AnimatePresence mode="wait">
+            {tradingMode === 'futures' ? (
+                <motion.div 
+                    key="futures"
+                    initial={{ opacity: 0, y: 5 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -5 }} 
+                    className="space-y-2"
+                >
+                <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1"><Zap size={10} /> Leverage</span>
+                    <span className="text-xs font-black text-[#F0B90B] bg-[#F0B90B]/10 px-2 py-0.5 rounded border border-[#F0B90B]/20">{leverage}x</span>
+                </div>
+                <input type="range" min="1" max="125" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-2 bg-[#0b0e11] rounded-full appearance-none cursor-pointer accent-[#F0B90B] border border-white/5" />
+                </motion.div>
+            ) : (
+                <motion.div 
+                    key="spot"
+                    initial={{ opacity: 0, y: 5 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -5 }}
+                    className="p-3 bg-[#21ce99]/5 border border-[#21ce99]/20 rounded-xl text-center relative overflow-hidden"
+                >
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+                    <span className="text-[10px] font-bold text-[#21ce99] uppercase tracking-wide relative z-10">Pro Spot Mode Active</span>
+                    <p className="text-[9px] text-gray-500 mt-1 relative z-10 leading-relaxed">
+                        Auto-Protect enabled.<br/>
+                        <span className="text-[#21ce99] opacity-90">TP: +20% | SL: -10%</span>
+                    </p>
+                </motion.div>
+            )}
+            </AnimatePresence>
+        </div>
 
         {/* MARGIN */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Amount (USDT)</span>
-            <div className="flex items-center gap-1 text-[10px] text-[#21ce99] font-bold">
-              <Wallet size={10} />
-              <span>${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Margin (USDT)</span>
+            <div className="flex items-center gap-1 text-[10px] text-white font-mono bg-white/5 px-1.5 py-0.5 rounded">
+              <Wallet size={10} className="text-[#21ce99]" />
+              <span>{balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
-          <div className="bg-black/40 border border-white/10 rounded-xl flex items-center px-4 py-3 focus-within:border-[#F0B90B]/50 transition-all">
-            <span className="text-gray-600 font-mono mr-2">$</span>
-            <input type="number" value={margin} onChange={(e) => setMargin(Number(e.target.value))} className="bg-transparent w-full text-right text-white font-black font-mono outline-none" />
+          <div className="relative group">
+             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono text-xs">$</div>
+             <input 
+                type="number" 
+                value={margin} 
+                onChange={(e) => setMargin(Number(e.target.value))} 
+                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-8 pr-4 text-right text-white font-mono font-bold focus:border-[#21ce99] focus:shadow-[0_0_15px_rgba(33,206,153,0.1)] outline-none transition-all" 
+             />
           </div>
         </div>
 
         {/* TP/SL SECTION */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 bg-white/[0.02] p-3 rounded-xl border border-white/5">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 bg-[#0b0e11] p-4 rounded-xl border border-white/5">
+              {/* TP */}
               <div className="space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                    <div className="flex gap-2 items-center">
-                      <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} className="accent-[#21ce99]" />
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight">Take Profit</span>
+                      <input type="checkbox" checked={tpEnabled} onChange={(e) => setTpEnabled(e.target.checked)} className="accent-[#21ce99] w-3 h-3 cursor-pointer" />
+                      <span className="text-[9px] font-bold text-[#21ce99] uppercase tracking-widest flex items-center gap-1"><Target size={10} /> Take Profit</span>
                    </div>
-                   <span className={`text-[9px] font-mono ${tpEnabled ? 'text-[#21ce99]' : 'text-gray-600 opacity-50'}`}>{getDiff(tpPrice)}%</span>
+                   <span className={`text-[9px] font-mono ${tpEnabled ? 'text-[#21ce99]' : 'text-gray-600'}`}>{getDiff(tpPrice)}%</span>
                 </div>
-                <div className={`relative transition-opacity ${!tpEnabled && 'opacity-40'}`}>
-                   <input type="number" disabled={!tpEnabled} value={tpPrice} onChange={(e) => setTpPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#21ce99] font-bold text-xs p-2 rounded border border-white/10 outline-none" />
-                   {!tpEnabled && <div className="absolute inset-0 flex items-center pl-2 text-[8px] text-gray-500 font-bold uppercase pointer-events-none">Auto Protect</div>}
+                <div className="relative">
+                   <input 
+                      type="number" 
+                      disabled={!tpEnabled} 
+                      value={tpPrice} 
+                      onChange={(e) => setTpPrice(e.target.value)} 
+                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-all ${tpEnabled ? 'text-[#21ce99] border-[#21ce99]/30' : 'text-gray-600 opacity-50'}`} 
+                   />
+                   {!tpEnabled && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[8px] text-gray-500 font-bold uppercase tracking-wider">Auto-Calc</span>}
                 </div>
               </div>
+
+              {/* SL */}
               <div className="space-y-2">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                    <div className="flex gap-2 items-center">
-                      <input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)} className="accent-[#f23645]" />
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tight">Stop Loss</span>
+                      <input type="checkbox" checked={slEnabled} onChange={(e) => setSlEnabled(e.target.checked)} className="accent-[#f23645] w-3 h-3 cursor-pointer" />
+                      <span className="text-[9px] font-bold text-[#f23645] uppercase tracking-widest flex items-center gap-1"><Shield size={10} /> Stop Loss</span>
                    </div>
-                   <span className={`text-[9px] font-mono ${slEnabled ? 'text-[#f23645]' : 'text-gray-600 opacity-50'}`}>{getDiff(slPrice)}%</span>
+                   <span className={`text-[9px] font-mono ${slEnabled ? 'text-[#f23645]' : 'text-gray-600'}`}>{getDiff(slPrice)}%</span>
                 </div>
-                <div className={`relative transition-opacity ${!slEnabled && 'opacity-40'}`}>
-                   <input type="number" disabled={!slEnabled} value={slPrice} onChange={(e) => setSlPrice(e.target.value)} className="bg-black/40 w-full text-right text-[#f23645] font-bold text-xs p-2 rounded border border-white/10 outline-none" />
-                   {!slEnabled && <div className="absolute inset-0 flex items-center pl-2 text-[8px] text-gray-500 font-bold uppercase pointer-events-none">Auto Protect</div>}
+                <div className="relative">
+                   <input 
+                      type="number" 
+                      disabled={!slEnabled} 
+                      value={slPrice} 
+                      onChange={(e) => setSlPrice(e.target.value)} 
+                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-all ${slEnabled ? 'text-[#f23645] border-[#f23645]/30' : 'text-gray-600 opacity-50'}`} 
+                   />
+                   {!slEnabled && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[8px] text-gray-500 font-bold uppercase tracking-wider">Auto-Calc</span>}
                 </div>
               </div>
             </motion.div>
@@ -234,49 +288,51 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         </AnimatePresence>
 
         {/* INFO BOX */}
-        <div className="bg-black/30 rounded-xl p-4 border border-white/5 space-y-3">
-          <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase">Size</span><span className="text-white">${buyingPower.toLocaleString()}</span></div>
-          <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase">Quantity</span><span className="text-white">{qty.toFixed(4)}</span></div>
+        <div className="bg-[#0b0e11] rounded-xl p-4 border border-white/5 space-y-3 relative overflow-hidden">
+          <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase tracking-wider">Position Size</span><span className="text-white font-mono">${buyingPower.toLocaleString()}</span></div>
+          <div className="flex justify-between text-[10px] font-bold"><span className="text-gray-500 uppercase tracking-wider">Asset Qty</span><span className="text-white font-mono">{qty.toFixed(4)}</span></div>
           {tradingMode === 'futures' && (
-            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
-              <div><p className="text-[8px] text-gray-400 font-bold mb-1 uppercase tracking-tighter">Liq. Long</p><p className="text-xs font-black text-[#21ce99]">${liqPriceLong.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
-              <div className="text-right"><p className="text-[8px] text-gray-400 font-bold mb-1 uppercase tracking-tighter">Liq. Short</p><p className="text-xs font-black text-[#f23645]">${liqPriceShort.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5 mt-2">
+              <div><p className="text-[8px] text-gray-500 font-bold mb-1 uppercase tracking-tighter">Liq. Long</p><p className="text-xs font-black text-[#f23645] font-mono">${liqPriceLong.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
+              <div className="text-right"><p className="text-[8px] text-gray-500 font-bold mb-1 uppercase tracking-tighter">Liq. Short</p><p className="text-xs font-black text-[#f23645] font-mono">${liqPriceShort.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p></div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ACTION BUTTONS: Now forces the flip logic before trade */}
-      <div className="p-4 grid grid-cols-2 gap-4 bg-black/40 border-t border-white/5">
+      {/* ACTION BUTTONS */}
+      <div className="p-5 grid grid-cols-2 gap-3 bg-[#0b0e11] border-t border-white/10 relative z-20">
         <motion.button 
-          whileHover={{ scale: 1.02, filter: "brightness(1.2)" }} 
+          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }} 
           whileTap={{ scale: 0.98 }}
           onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('buy'); }} 
           onClick={() => handleTrade('buy')}
           disabled={isProcessing} 
-          className="bg-gradient-to-b from-[#21ce99] to-[#00b07c] text-[#0b0e11] py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.3)] border-b-4 border-[#17a075] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+          className="group relative overflow-hidden bg-[#21ce99] text-[#0b0e11] py-4 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.15)] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
+          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
           {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (
-             <>
-               <span className="text-sm font-black tracking-tighter uppercase">Buy</span>
-               <span className="text-[8px] font-black opacity-60 uppercase tracking-widest">Long</span>
-             </>
+             <div className="relative z-10 flex flex-col items-center">
+               <span className="text-sm font-black tracking-tighter uppercase">Buy / Long</span>
+               <span className="text-[8px] font-bold opacity-60 uppercase tracking-widest mt-0.5">Entry</span>
+             </div>
           )}
         </motion.button>
 
         <motion.button 
-          whileHover={{ scale: 1.02, filter: "brightness(1.2)" }}
+          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }} 
           whileTap={{ scale: 0.98 }}
           onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('sell'); }} 
           onClick={() => handleTrade('sell')}
           disabled={isProcessing} 
-          className="bg-gradient-to-b from-[#f23645] to-[#c71d2b] text-white py-3 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.3)] border-b-4 border-[#a61a26] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+          className="group relative overflow-hidden bg-[#f23645] text-white py-4 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.15)] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
+          <div className="absolute inset-0 bg-black/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
           {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (
-             <>
-               <span className="text-sm font-black tracking-tighter uppercase">Sell</span>
-               <span className="text-[8px] font-black opacity-60 uppercase tracking-widest">Short</span>
-             </>
+             <div className="relative z-10 flex flex-col items-center">
+               <span className="text-sm font-black tracking-tighter uppercase">Sell / Short</span>
+               <span className="text-[8px] font-bold opacity-80 uppercase tracking-widest mt-0.5">Entry</span>
+             </div>
           )}
         </motion.button>
       </div>

@@ -7,12 +7,13 @@ import type { Order } from "../types";
 interface PositionsPanelProps {
   orders: Order[];
   history: Order[]; 
-  currentPrice: number | null;
+  currentPrice: number | null; // Keep for the header status only
+  marketPrices: Record<string, number>; // 👈 NEW: Real prices for all symbols
   onCloseOrder: (id: number) => void;
   lastOrderTime?: number;
 }
 
-export default function PositionsPanel({ orders, history, currentPrice, onCloseOrder, lastOrderTime }: PositionsPanelProps) {
+export default function PositionsPanel({ orders, history, currentPrice, marketPrices, onCloseOrder, lastOrderTime }: PositionsPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'positions' | 'open' | 'history'>('positions');
   const currentTime = useClock();
@@ -35,8 +36,8 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">Size</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden sm:table-cell">Entry Price</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden sm:table-cell">Mark Price</th>
-                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">TP</th> {/* ✅ Added TP Header */}
-                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">SL</th> {/* ✅ Added SL Header */}
+                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">TP</th>
+                      <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">SL</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right hidden md:table-cell">Liq. Price</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-right">PnL (ROE%)</th>
                       <th className="px-2 md:px-4 py-2 border-b border-[#2a2e39] text-center">Close</th>
@@ -47,7 +48,9 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                       <tr><td colSpan={10} className="text-center py-10 text-gray-600 italic">No open positions</td></tr>
                     ) : (
                       orders.map(order => {
-                          const price = currentPrice || 0;
+                          // 🛑 FIX: Use the SPECIFIC price for this symbol, or fallback to entry
+                          const price = marketPrices[order.symbol] || order.entryPrice; 
+                          
                           const diff = price - order.entryPrice;
                           const pnlPercent = diff / order.entryPrice * 100 * (order.type === 'buy' ? 1 : -1) * order.leverage;
                           const pnlValue = (order.margin * pnlPercent / 100);
@@ -76,16 +79,12 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
                                <td className="px-2 md:px-4 py-2 text-right hidden sm:table-cell">{order.entryPrice.toFixed(2)}</td>
                                <td className="px-2 md:px-4 py-2 text-right hidden sm:table-cell">{price.toFixed(2)}</td>
                                
-                               {/* ✅ TP DATA CELL */}
                                <td className="px-2 md:px-4 py-2 text-right text-[#21ce99] hidden md:table-cell">
                                  {order.takeProfit ? order.takeProfit.toFixed(2) : '--'}
                                </td>
-
-                               {/* ✅ SL DATA CELL */}
                                <td className="px-2 md:px-4 py-2 text-right text-[#f23645] hidden md:table-cell">
                                  {order.stopLoss ? order.stopLoss.toFixed(2) : '--'}
                                </td>
-
                                <td className="px-2 md:px-4 py-2 text-right text-[#F0B90B] hidden md:table-cell">
                                  {order.liquidationPrice > 0 ? order.liquidationPrice.toFixed(2) : '--'}
                                </td>
@@ -111,6 +110,7 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
         );
     } 
     
+    // ... (ActiveTab 'open' and 'history' remain mostly the same, just keeping the file structure clean)
     else if (activeTab === 'open') {
         return (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 py-10">
@@ -176,6 +176,7 @@ export default function PositionsPanel({ orders, history, currentPrice, onCloseO
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="fixed bottom-0 left-0 right-0 z-40 bg-[#151a21] border-t border-[#2a2e39] flex flex-col shadow-[0_-5px_20px_rgba(0,0,0,0.5)]"
     >
+      {/* HEADER SECTION (Remains mostly the same, but currentPrice is just for display now) */}
       <div 
         className="h-10 flex items-center px-2 md:px-4 bg-[#191f2e] border-b border-[#2a2e39] cursor-pointer hover:bg-[#1e232d] transition-colors"
         onClick={() => setIsOpen(!isOpen)}

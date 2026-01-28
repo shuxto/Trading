@@ -66,8 +66,7 @@ export default function VerificationTab() {
         else if (currentStatus === 'verified' || currentStatus === 'approved') setStatus('verified');
         else setStatus('unverified');
 
-        // B. SETUP REALTIME LISTENER (The Magic Part)
-        // This watches the 'profiles' table for changes to THIS specific user
+        // B. SETUP REALTIME LISTENER
         channel = supabase
             .channel('kyc-status-update')
             .on(
@@ -76,12 +75,10 @@ export default function VerificationTab() {
                     event: 'UPDATE',
                     schema: 'public',
                     table: 'profiles',
-                    filter: `id=eq.${user.id}`, // Only listen for MY changes
+                    filter: `id=eq.${user.id}`, 
                 },
                 (payload) => {
                     const newStatus = payload.new.kyc_status?.toLowerCase();
-                    console.log("Realtime Update Received:", newStatus);
-                    
                     if (newStatus === 'pending') setStatus('pending');
                     else if (newStatus === 'verified' || newStatus === 'approved') setStatus('verified');
                     else setStatus('unverified');
@@ -89,17 +86,14 @@ export default function VerificationTab() {
             )
             .subscribe();
 
-        // C. Fetch Existing Data (Bridge Logic)
+        // C. Fetch Existing Data
         let targetLeadId = null;
-        // 1. Try Link
         const { data: linkedLead } = await supabase.from('crm_leads').select('id').eq('trading_account_id', user.id).maybeSingle();
         if (linkedLead) targetLeadId = linkedLead.id;
-        // 2. Try Email
         if (!targetLeadId && user.email) {
             const { data: emailLead } = await supabase.from('crm_leads').select('id').eq('email', user.email).maybeSingle();
             if (emailLead) targetLeadId = emailLead.id;
         }
-        // 3. Fetch
         if (targetLeadId) {
             const { data: kyc } = await supabase.from('crm_kyc').select('*').eq('lead_id', targetLeadId).maybeSingle();
             if (kyc) {
@@ -127,7 +121,6 @@ export default function VerificationTab() {
 
     init();
 
-    // Cleanup Listener on Unmount
     return () => {
         if (channel) supabase.removeChannel(channel);
     };
@@ -230,8 +223,6 @@ export default function VerificationTab() {
         await supabase.from('profiles').update({ kyc_status: 'pending' }).eq('id', userId);
         await supabase.from('crm_leads').update({ kyc_status: 'Pending' }).eq('id', targetLeadId);
 
-        // NOTE: We don't technically need setStatus('pending') here because the Realtime listener will catch the update above!
-        // But keeping it for immediate UI feedback is good practice.
         setStatus('pending');
         setSuccessMsg("Verification Dossier Submitted Successfully!");
 
@@ -253,28 +244,28 @@ export default function VerificationTab() {
   const updateBank = (id: number, val: string) => setFormData(p => ({ ...p, banks: p.banks.map(b => b.id === id ? { ...b, name: val } : b) }));
   const removeBank = (id: number) => setFormData(p => ({ ...p, banks: p.banks.filter(b => b.id !== id) }));
 
-  if (loading) return <div className="p-12 text-center text-gray-500"><Loader2 className="animate-spin mx-auto"/> Loading Verification Profile...</div>;
+  if (loading) return <div className="p-12 text-center text-gray-500 font-mono text-xs"><Loader2 className="animate-spin mx-auto"/> DECRYPTING PROFILE DATA...</div>;
 
   // --- VIEWS (PENDING / VERIFIED) ---
   if (status === 'pending') {
       return (
         <div className="max-w-2xl mx-auto mt-10 animate-in fade-in">
-            <div className="bg-[#1e232d] p-10 rounded-3xl border border-[#2a2e39] text-center shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-yellow-600 via-yellow-400 to-yellow-600"></div>
-                <div className="w-24 h-24 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-yellow-500/20 shadow-[0_0_30px_rgba(234,179,8,0.1)]">
+            <div className="bg-[#1e232d] p-10 rounded-[30px] border border-[#2a2e39] text-center shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#F0B90B] to-transparent animate-pulse"></div>
+                <div className="w-24 h-24 bg-[#F0B90B]/10 text-[#F0B90B] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#F0B90B]/20 shadow-[0_0_30px_rgba(234,179,8,0.2)]">
                     <Clock size={48} className="animate-pulse" />
                 </div>
-                <h3 className="text-2xl font-black text-white mb-3">Dossier Under Review</h3>
-                <p className="text-[#8b9bb4] leading-relaxed text-sm px-4">
-                  Your identity verification dossier is currently being reviewed by our compliance team.
+                <h3 className="text-2xl font-black text-white mb-3 uppercase tracking-tight">Dossier Under Review</h3>
+                <p className="text-[#8b9bb4] leading-relaxed text-sm px-4 font-mono">
+                  IDENTITY VERIFICATION DOSSIER TRANSMITTED. <br/>AWAITING COMPLIANCE OFFICER APPROVAL.
                 </p>
                 <div className="mt-8 p-5 bg-[#151a21] rounded-2xl border border-white/5 flex flex-col gap-3">
-                   <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest">
-                      <span className="text-gray-500">Live Status</span>
-                      <span className="text-yellow-500 animate-pulse">Waiting for Agent...</span>
+                   <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest">
+                      <span className="text-gray-500">Live Uplink</span>
+                      <span className="text-[#F0B90B] animate-pulse">Processing...</span>
                    </div>
                    <div className="w-full bg-black/40 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-yellow-500 h-full w-2/3 animate-pulse"></div>
+                      <div className="bg-[#F0B90B] h-full w-2/3 animate-[pulse_2s_infinite]"></div>
                    </div>
                 </div>
             </div>
@@ -285,14 +276,14 @@ export default function VerificationTab() {
   if (status === 'verified') {
       return (
         <div className="max-w-2xl mx-auto mt-10 animate-in fade-in">
-            <div className="bg-[#1e232d] p-10 rounded-3xl border border-green-500/20 text-center relative overflow-hidden shadow-2xl">
-                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-green-600 via-green-400 to-green-600"></div>
-                <div className="w-24 h-24 bg-green-500/10 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/20">
+            <div className="bg-[#1e232d] p-10 rounded-[30px] border border-[#21ce99]/30 text-center relative overflow-hidden shadow-[0_0_50px_rgba(33,206,153,0.1)]">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#21ce99] to-transparent"></div>
+                <div className="w-24 h-24 bg-[#21ce99]/10 text-[#21ce99] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#21ce99]/30 shadow-[0_0_30px_rgba(33,206,153,0.3)]">
                     <ShieldCheck size={48} />
                 </div>
-                <h3 className="text-2xl font-black text-white mb-3">Identity Verified</h3>
-                <p className="text-[#8b9bb4] leading-relaxed text-sm px-4">
-                  Your account is fully authorized for trading and withdrawals.
+                <h3 className="text-2xl font-black text-white mb-3 uppercase tracking-tight">Identity Verified</h3>
+                <p className="text-[#8b9bb4] leading-relaxed text-sm px-4 font-mono">
+                  SECURITY CLEARANCE GRANTED. <br/>FULL TRADING & WITHDRAWAL PRIVILEGES UNLOCKED.
                 </p>
             </div>
         </div>
@@ -300,35 +291,42 @@ export default function VerificationTab() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto animate-in fade-in relative pb-20">
+    <div className="max-w-4xl mx-auto animate-in fade-in relative pb-20 font-sans">
       
       {/* SUCCESS POPUP */}
       {successMsg && (
         <div className="fixed top-20 right-10 z-50 animate-in slide-in-from-top-5 fade-in duration-300">
-            <div className="bg-[#1e232d] border border-green-500/30 rounded-2xl shadow-2xl shadow-green-500/20 p-5 flex items-center gap-4 min-w-75 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-green-400 to-emerald-600"></div>
-                <div className="p-3 bg-green-500/10 rounded-full text-green-400"><CheckCircle size={24} /></div>
+            <div className="bg-[#1e232d] border border-[#21ce99]/30 rounded-2xl shadow-2xl shadow-[#21ce99]/20 p-5 flex items-center gap-4 min-w-[300px] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#21ce99] to-emerald-600"></div>
+                <div className="p-3 bg-[#21ce99]/10 rounded-full text-[#21ce99]"><CheckCircle size={24} /></div>
                 <div>
-                    <h4 className="text-white font-bold text-sm">Success!</h4>
-                    <p className="text-gray-400 text-xs mt-0.5">{successMsg}</p>
+                    <h4 className="text-white font-bold text-sm uppercase tracking-wide">Transmission Complete</h4>
+                    <p className="text-gray-400 text-xs mt-0.5 font-mono">{successMsg}</p>
                 </div>
                 <button onClick={() => setSuccessMsg(null)} className="ml-auto text-gray-500 hover:text-white transition cursor-pointer"><X size={16} /></button>
             </div>
         </div>
       )}
 
-      <div className="mb-8">
-        <h2 className="text-3xl font-black text-white tracking-tighter">Account Verification</h2>
-        <p className="text-[#8b9bb4] mt-1">Submit your identification dossier to authorize live trading capabilities.</p>
+      <div className="mb-8 flex items-center gap-4">
+        <div className="p-3 bg-[#21ce99]/10 rounded-xl text-[#21ce99] border border-[#21ce99]/20 shadow-[0_0_15px_rgba(33,206,153,0.2)]">
+            <ShieldCheck size={32} />
+        </div>
+        <div>
+            <h2 className="text-3xl font-black text-white uppercase tracking-tight">Identity Core</h2>
+            <p className="text-[#8b9bb4] font-mono text-xs mt-1">SUBMIT ENCRYPTED DOSSIER FOR LEVEL 2 CLEARANCE</p>
+        </div>
       </div>
       
       <form onSubmit={handleSubmitKYC} className="space-y-6">
-          <div className="bg-[#1e232d] p-8 rounded-2xl border border-[#2a2e39] space-y-8">
+          <div className="bg-[#151a21] p-8 rounded-[24px] border border-white/10 space-y-8 relative overflow-hidden shadow-2xl">
+              {/* Scanline Background */}
+              <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, transparent 24%, #fff 25%, #fff 26%, transparent 27%, transparent 74%, #fff 75%, #fff 76%, transparent 77%, transparent)', backgroundSize: '30px 30px' }} />
               
               {/* --- SECTION 1: IDENTITY --- */}
-              <div>
+              <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-6 text-[#21ce99]">
-                    <User size={20}/> <span className="font-bold uppercase tracking-widest text-sm">Personal Information</span>
+                    <User size={18}/> <span className="font-bold uppercase tracking-widest text-xs">Personal Data Record</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Input label="First Name" val={formData.firstName} set={(v) => setFormData({...formData, firstName: v})} />
@@ -339,12 +337,12 @@ export default function VerificationTab() {
                 </div>
               </div>
 
-              <div className="h-px bg-white/5" />
+              <div className="h-px bg-white/5 relative z-10" />
 
               {/* --- SECTION 2: ADDRESS (WITH COUNTRY SELECT) --- */}
-              <div>
-                <div className="flex items-center gap-2 mb-6 text-purple-400">
-                    <MapPin size={20}/> <span className="font-bold uppercase tracking-widest text-sm">Residential Address</span>
+              <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-6 text-[#F0B90B]">
+                    <MapPin size={18}/> <span className="font-bold uppercase tracking-widest text-xs">Geolocation Data</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
@@ -357,25 +355,25 @@ export default function VerificationTab() {
                         <select 
                             value={formData.country}
                             onChange={(e) => setFormData({...formData, country: e.target.value})}
-                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-[#21ce99] outline-none transition-all placeholder:text-gray-700 appearance-none"
+                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-[#F0B90B] outline-none transition-all placeholder:text-gray-700 appearance-none font-mono"
                         >
-                            <option value="">-- Select Country --</option>
+                            <option value="">-- SELECT SECTOR --</option>
                             {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
                 </div>
               </div>
 
-              <div className="h-px bg-white/5" />
+              <div className="h-px bg-white/5 relative z-10" />
 
               {/* --- SECTION 3: FINANCIAL & BANKING --- */}
-              <div>
+              <div className="relative z-10">
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2 text-emerald-400">
-                        <Landmark size={20}/> <span className="font-bold uppercase tracking-widest text-sm">Financial & Banking</span>
+                    <div className="flex items-center gap-2 text-blue-400">
+                        <Landmark size={18}/> <span className="font-bold uppercase tracking-widest text-xs">Financial Protocol</span>
                     </div>
-                    <button type="button" onClick={addBank} className="text-xs flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-3 py-1.5 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition cursor-pointer">
-                        <Plus size={14}/> Add Bank
+                    <button type="button" onClick={addBank} className="text-[10px] uppercase font-bold flex items-center gap-1 bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20 hover:bg-blue-500/20 transition cursor-pointer">
+                        <Plus size={12}/> Add Account
                     </button>
                 </div>
 
@@ -385,7 +383,7 @@ export default function VerificationTab() {
                         <select 
                             value={formData.employment}
                             onChange={(e) => setFormData({...formData, employment: e.target.value})}
-                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none transition-all"
+                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none transition-all font-mono"
                         >
                             <option value="employed">Employed</option>
                             <option value="self_employed">Self-Employed</option>
@@ -398,7 +396,7 @@ export default function VerificationTab() {
                         <select 
                             value={formData.income}
                             onChange={(e) => setFormData({...formData, income: e.target.value})}
-                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none transition-all"
+                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none transition-all font-mono"
                         >
                             <option value="0-25k">$0 - $25k</option>
                             <option value="25k-50k">$25k - $50k</option>
@@ -416,14 +414,14 @@ export default function VerificationTab() {
                     {formData.banks.map((bank: any, index: number) => (
                         <div key={bank.id} className="flex items-end gap-3 animate-in slide-in-from-left-2">
                             <div className="w-full">
-                                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">
-                                    {index === 0 ? 'Primary Settlement Bank' : `Secondary Bank #${index + 1}`}
+                                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">
+                                    {index === 0 ? 'Primary Settlement Node' : `Secondary Node #${index + 1}`}
                                 </label>
                                 <input 
                                     type="text"
                                     value={bank.name} 
                                     onChange={(e) => updateBank(bank.id, e.target.value)} 
-                                    className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none transition placeholder:text-gray-700"
+                                    className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none transition placeholder:text-gray-700 font-mono"
                                     placeholder="e.g. Chase, Revolut"
                                 />
                             </div>
@@ -439,15 +437,15 @@ export default function VerificationTab() {
           </div>
 
           {/* --- SECTION 4: DOCUMENT UPLOAD --- */}
-          <div className="bg-[#1e232d] p-8 rounded-2xl border border-[#2a2e39] space-y-6">
-              <div className="flex items-center gap-2 text-blue-400">
-                  <FolderOpen size={20}/> <span className="font-bold uppercase tracking-widest text-sm">Identification Document</span>
+          <div className="bg-[#151a21] p-8 rounded-[24px] border border-white/10 space-y-6 shadow-xl">
+              <div className="flex items-center gap-2 text-purple-400">
+                  <FolderOpen size={18}/> <span className="font-bold uppercase tracking-widest text-xs">Biometric & ID Upload</span>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <TypeBtn type="passport" label="Passport" icon={<FileText size={14}/>} active={formData.idType} set={(t) => setFormData({...formData, idType: t})} />
                   <TypeBtn type="id_card" label="National ID" icon={<CreditCard size={14}/>} active={formData.idType} set={(t) => setFormData({...formData, idType: t})} />
-                  <TypeBtn type="driver_license" label="Driver License" icon={<User size={14}/>} active={formData.idType} set={(t) => setFormData({...formData, idType: t})} />
+                  <TypeBtn type="driver_license" label="Driver Lic" icon={<User size={14}/>} active={formData.idType} set={(t) => setFormData({...formData, idType: t})} />
                   <TypeBtn type="other" label="Other Doc" icon={<Plus size={14}/>} active={formData.idType} set={(t) => setFormData({...formData, idType: t})} />
               </div>
 
@@ -456,17 +454,17 @@ export default function VerificationTab() {
                     onClick={() => !selectedFile && fileInputRef.current?.click()}
                     className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center transition-all ${
                         selectedFile 
-                        ? 'border-green-500/50 bg-green-500/5 cursor-default' 
+                        ? 'border-[#21ce99]/50 bg-[#21ce99]/5 cursor-default' 
                         : 'border-[#2a2e39] hover:border-[#21ce99]/50 hover:bg-[#0b0e11]/50 cursor-pointer'
                     }`}
                 >
                     {selectedFile ? (
                         <>
-                            <div className="w-20 h-20 bg-green-500/10 text-green-400 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(34,197,94,0.1)]">
+                            <div className="w-20 h-20 bg-[#21ce99]/10 text-[#21ce99] rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(34,197,94,0.1)]">
                                 <CheckCircle size={40}/>
                             </div>
-                            <span className="text-white font-bold max-w-[300px] truncate">{selectedFile.name}</span>
-                            <span className="text-gray-500 text-xs mt-1">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB • Attachment Verified</span>
+                            <span className="text-white font-bold font-mono text-sm max-w-[300px] truncate">{selectedFile.name}</span>
+                            <span className="text-[#21ce99] text-[10px] font-bold uppercase tracking-widest mt-1">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB • SECURE HASH VERIFIED</span>
                             
                             <button 
                                 type="button"
@@ -475,16 +473,16 @@ export default function VerificationTab() {
                                     setSelectedFile(null);
                                     if (fileInputRef.current) fileInputRef.current.value = '';
                                 }}
-                                className="mt-5 flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-xs font-black uppercase tracking-widest cursor-pointer"
+                                className="mt-5 flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all text-[10px] font-black uppercase tracking-widest cursor-pointer"
                             >
-                                <Trash2 size={14} /> Remove Attachment
+                                <Trash2 size={14} /> Detach File
                             </button>
                         </>
                     ) : (
                         <>
                             <UploadCloud size={48} className="text-[#5e6673] mb-4 group-hover:text-[#21ce99] transition-colors"/>
-                            <span className="text-white font-bold">Upload Verification Document</span>
-                            <span className="text-[#5e6673] text-xs mt-1">JPG, PNG or PDF (Max 5MB)</span>
+                            <span className="text-white font-bold text-sm uppercase tracking-wide">Drag Drop or Select File</span>
+                            <span className="text-[#5e6673] text-[10px] font-mono mt-1">SUPPORTED FORMATS: JPG, PNG, PDF (MAX 5MB)</span>
                         </>
                     )}
                 </div>
@@ -495,10 +493,10 @@ export default function VerificationTab() {
           <button 
             type="submit"
             disabled={submitting} 
-            className="w-full bg-[#21ce99] hover:bg-[#1aa37a] text-[#0b0e11] py-5 rounded-2xl font-black text-lg tracking-tight transition-all flex items-center justify-center gap-3 shadow-2xl shadow-[#21ce99]/20 disabled:opacity-50 disabled:grayscale cursor-pointer active:scale-[0.99]"
+            className="w-full bg-[#21ce99] hover:bg-[#1aa37a] text-[#0b0e11] py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-2xl shadow-[#21ce99]/20 disabled:opacity-50 disabled:grayscale cursor-pointer active:scale-[0.99] hover:shadow-[0_0_30px_rgba(33,206,153,0.4)]"
           >
-              {submitting ? <Loader2 className="animate-spin" size={24}/> : <Send size={24}/>}
-              {submitting ? 'VALIDATING SECURITY PROTOCOLS...' : 'SUBMIT VERIFICATION DOSSIER'}
+              {submitting ? <Loader2 className="animate-spin" size={20}/> : <Send size={20}/>}
+              {submitting ? 'ENCRYPTING & TRANSMITTING...' : 'INITIATE UPLOAD SEQUENCE'}
           </button>
       </form>
     </div>
@@ -516,8 +514,8 @@ function Input({ label, type="text", placeholder, val, set }: { label: string, t
                 value={val} 
                 onChange={(e) => set(e.target.value)} 
                 placeholder={placeholder}
-                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-[#21ce99] outline-none transition-all placeholder:text-gray-700"
-                style={{ colorScheme: 'dark' }} // Forces calendar icon to be light
+                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl px-4 py-3 text-white text-sm focus:border-[#21ce99] focus:shadow-[0_0_15px_rgba(33,206,153,0.1)] outline-none transition-all placeholder:text-gray-700 font-mono"
+                style={{ colorScheme: 'dark' }} 
             />
         </div>
     );
@@ -529,8 +527,8 @@ function TypeBtn({ type, label, icon, active, set }: { type: string, label: stri
         <button 
             type="button"
             onClick={() => set(type)}
-            className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter border transition-all cursor-pointer ${
-                isActive ? 'bg-[#21ce99]/10 border-[#21ce99] text-[#21ce99] shadow-lg shadow-[#21ce99]/5' : 'bg-[#0b0e11] border-[#2a2e39] text-gray-500 hover:border-gray-600 hover:text-gray-300'
+            className={`flex items-center justify-center gap-2 px-3 py-4 rounded-xl text-[10px] font-black uppercase tracking-tighter border transition-all cursor-pointer ${
+                isActive ? 'bg-[#21ce99] border-[#21ce99] text-[#0b0e11] shadow-lg shadow-[#21ce99]/20' : 'bg-[#0b0e11] border-[#2a2e39] text-gray-500 hover:border-gray-600 hover:text-gray-300'
             }`}
         >
             {icon} {label}
