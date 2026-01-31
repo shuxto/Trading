@@ -329,7 +329,7 @@ export default function App() {
     }
   };
 
-  // --- 4. REALTIME TRADES SYNC (FIXED: NO DOUBLE BUYS) ---
+  // --- 4. REALTIME TRADES SYNC (FIXED: NO DOUBLE BUYS) PIG  ---
   useEffect(() => {
     if (!activeAccount) return;
 

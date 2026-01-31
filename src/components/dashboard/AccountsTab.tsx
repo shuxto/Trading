@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Plus, Play, Briefcase, Trash2, Wallet, X, AlertTriangle, Zap, Terminal } from 'lucide-react';
+// Removed Trash2, AlertTriangle, Zap from imports
+import { Plus, Play, Briefcase, Wallet, X, Terminal } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { TradingAccount } from '../../types';
 
@@ -10,8 +11,7 @@ export default function AccountsTab() {
   const [isCreating, setIsCreating] = useState(false);
   const [mainBalance, setMainBalance] = useState(0);
 
-  // GLASS POPUP STATE
-  const [showAgentPopup, setShowAgentPopup] = useState(false);
+  // Removed showAgentPopup state
 
   useEffect(() => {
     fetchAccounts();
@@ -57,19 +57,7 @@ export default function AccountsTab() {
     }
   };
 
-  const deleteAccount = async (id: number) => {
-    const { error } = await supabase.from('trading_accounts').delete().eq('id', id);
-    
-    if (error) {
-        if (error.code === '23503' || error.message.includes('foreign key constraint')) {
-            setShowAgentPopup(true); 
-        } else {
-            alert("Error: " + error.message);
-        }
-    } else {
-        fetchAccounts();
-    }
-  };
+  // Removed deleteAccount function
 
   const handleOpenInNewTab = (accountId: number) => {
       const url = `${window.location.origin}?mode=trading&account_id=${accountId}`;
@@ -79,52 +67,7 @@ export default function AccountsTab() {
   return (
     <div className="space-y-8 animate-in fade-in relative min-h-[500px]">
       
-      {/* --- GLASSMORPHIC ERROR POPUP --- */}
-      <AnimatePresence>
-        {showAgentPopup && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-          >
-            <motion.div 
-                initial={{ scale: 0.9, y: 50 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.9, y: 50 }}
-                className="relative w-full max-w-md p-1 rounded-3xl bg-gradient-to-br from-red-500/20 to-orange-500/20"
-            >
-                <div className="bg-[#151a21] p-8 rounded-[22px] border border-white/10 relative overflow-hidden">
-                    {/* Close Button */}
-                    <button onClick={() => setShowAgentPopup(false)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"><X size={20} /></button>
-
-                    <div className="flex flex-col items-center text-center space-y-4 relative z-10">
-                        <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-[#f23645] to-[#ff6b6b] flex items-center justify-center shadow-[0_0_30px_rgba(242,54,69,0.4)]">
-                            <AlertTriangle size={36} className="text-white fill-white/20" />
-                        </div>
-                        
-                        <h3 className="text-2xl font-black text-white uppercase tracking-tight">Access Denied</h3>
-                        
-                        <p className="text-[#8b9bb4] text-sm leading-relaxed max-w-[280px]">
-                            This room contains active data history. Security protocols prevent deletion.
-                        </p>
-
-                        <div className="w-full p-4 rounded-xl bg-white/5 border border-white/5 text-xs text-[#21ce99] font-mono uppercase tracking-widest flex items-center justify-center gap-2">
-                            <Zap size={14} /> Contact Support Agent
-                        </div>
-
-                        <button onClick={() => setShowAgentPopup(false)} className="mt-2 px-8 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-200 transition-colors w-full uppercase tracking-wider text-sm">
-                            Acknowledge
-                        </button>
-                    </div>
-                    {/* Background Glow */}
-                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-red-500/5 to-transparent pointer-events-none" />
-                </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      {/* Removed AnimatePresence (Error Popup) */}
 
       {/* --- HUD HEADER --- */}
       <div className="relative p-8 rounded-3xl overflow-hidden border border-white/10 group">
@@ -165,40 +108,98 @@ export default function AccountsTab() {
         </div>
       </div>
 
-      {/* --- CREATE ROW --- */}
+     {/* --- CREATE MODAL (UPGRADED UI) --- */}
       <AnimatePresence>
         {isCreating && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            
+            {/* Dark Overlay Backdrop */}
             <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                onClick={() => setIsCreating(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+
+            {/* The Command Card */}
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-lg bg-[#151a21] border border-white/10 rounded-[30px] p-8 overflow-hidden shadow-[0_0_100px_rgba(33,206,153,0.1)]"
             >
-                <div className="bg-[#1e232d]/50 border border-[#21ce99]/30 p-2 rounded-2xl flex items-center gap-2">
-                    <div className="h-10 w-10 bg-[#21ce99]/10 rounded-xl flex items-center justify-center text-[#21ce99]">
-                        <Terminal size={20} />
+                {/* Background Glow Effect */}
+                <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#21ce99]/10 blur-[80px] rounded-full pointer-events-none" />
+
+                <div className="relative z-10">
+                    
+                    {/* Header */}
+                    <div className="flex justify-between items-start mb-8">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-1.5 h-1.5 bg-[#21ce99] rounded-full animate-pulse" />
+                                <span className="text-[10px] font-mono text-[#21ce99] uppercase tracking-widest">System Override</span>
+                            </div>
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Deploy Unit</h2>
+                            <p className="text-[#8b9bb4] text-sm mt-1">Initialize a new isolated trading environment.</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsCreating(false)} 
+                            className="p-2 rounded-full bg-white/5 text-white/50 hover:bg-white/10 hover:text-white transition-all"
+                        >
+                            <X size={20} />
+                        </button>
                     </div>
-                    <input 
-                        type="text" 
-                        placeholder="ENTER STRATEGY NAME..."
-                        value={newAccountName}
-                        onChange={(e) => setNewAccountName(e.target.value)}
-                        className="flex-1 bg-transparent border-none text-white font-bold placeholder-gray-600 focus:ring-0 uppercase tracking-wide"
-                        autoFocus
-                    />
-                    <button onClick={createAccount} className="bg-[#21ce99] text-[#0b0e11] px-6 py-2 rounded-xl font-bold text-xs uppercase hover:brightness-110 transition-all">
-                        Initialize
-                    </button>
-                    <button onClick={() => setIsCreating(false)} className="p-2 text-gray-500 hover:text-white transition-colors">
-                        <X size={20} />
-                    </button>
+
+                    {/* Input Area */}
+                    <div className="space-y-8">
+                        <div className="space-y-3">
+                            <label className="text-[10px] uppercase font-bold text-[#5e6673] tracking-widest ml-1">Strategy Identifier</label>
+                            <div className="group bg-[#0b0e11] border border-white/10 rounded-2xl flex items-center p-5 gap-4 focus-within:border-[#21ce99] focus-within:shadow-[0_0_30px_rgba(33,206,153,0.15)] transition-all duration-300">
+                                <div className="p-2 bg-[#21ce99]/10 rounded-lg text-[#21ce99] group-focus-within:scale-110 transition-transform">
+                                    <Terminal size={24} />
+                                </div>
+                                <input 
+                                    type="text" 
+                                    placeholder="ENTER UNIT NAME..."
+                                    value={newAccountName}
+                                    onChange={(e) => setNewAccountName(e.target.value)}
+                                    className="bg-transparent border-none text-white font-bold text-xl placeholder-gray-700 w-full focus:ring-0 uppercase tracking-wide"
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && createAccount()}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Buttons */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <button 
+                                onClick={() => setIsCreating(false)} 
+                                className="py-4 rounded-xl font-bold text-xs uppercase tracking-widest text-[#8b9bb4] hover:bg-white/5 hover:text-white transition-colors"
+                            >
+                                Abort
+                            </button>
+                            <button 
+                                onClick={createAccount} 
+                                disabled={!newAccountName.trim()}
+                                className="bg-[#21ce99] hover:bg-[#1db586] disabled:opacity-50 disabled:cursor-not-allowed text-[#0b0e11] py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(33,206,153,0.2)] hover:shadow-[0_0_30px_rgba(33,206,153,0.4)] hover:scale-[1.02] active:scale-[0.98] transition-all"
+                            >
+                                Initialize System
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
-      {/* --- GAMIFIED CARDS GRID --- */}
+{/* --- GAMIFIED CARDS GRID --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        {/* EXISTING ACCOUNTS */}
         {accounts.map((acc, index) => (
           <motion.div 
             key={acc.id} 
@@ -229,15 +230,8 @@ export default function AccountsTab() {
                             <span className="text-[10px] text-[#5e6673] font-mono mt-1 block">ID: {String(acc.id).padStart(4, '0')}</span>
                         </div>
                     </div>
-                    
-                    <button 
-                        onClick={() => deleteAccount(acc.id)}
-                        className="text-[#2a303c] hover:text-[#f23645] transition-colors p-2 hover:bg-[#f23645]/10 rounded-lg"
-                    >
-                        <Trash2 size={16} />
-                    </button>
                 </div>
-
+                
                 {/* Balance Area */}
                 <div className="relative z-10 mt-auto mb-6">
                     <div className="flex items-baseline gap-1 text-[10px] text-[#8b9bb4] uppercase font-bold tracking-wider mb-1">
@@ -262,18 +256,28 @@ export default function AccountsTab() {
           </motion.div>
         ))}
 
-        {/* --- EMPTY STATE CARD --- */}
-        {accounts.length === 0 && (
-            <div className="border-2 border-dashed border-white/5 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4 opacity-50 hover:opacity-100 hover:border-[#21ce99]/30 transition-all cursor-pointer min-h-[300px]" onClick={() => setIsCreating(true)}>
-                <div className="h-16 w-16 rounded-full bg-white/5 flex items-center justify-center">
-                    <Plus size={32} className="text-[#21ce99]" />
+        {/* 🆕 NEW: THE "ADD UNIT" CARD (Ghost Card) */}
+        <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            onClick={() => setIsCreating(true)}
+            className="group relative bg-[#151a21]/50 rounded-3xl p-1 cursor-pointer hover:bg-[#151a21] transition-all duration-300 min-h-[280px]"
+        >
+            <div className="relative h-full rounded-[20px] border-2 border-dashed border-white/10 group-hover:border-[#21ce99]/50 flex flex-col items-center justify-center gap-4 transition-all bg-[#191f2e]/30 group-hover:bg-[#191f2e]">
+                
+                <div className="h-16 w-16 rounded-full bg-white/5 group-hover:bg-[#21ce99]/20 flex items-center justify-center transition-all group-hover:scale-110 shadow-[0_0_0_1px_rgba(255,255,255,0.05)] group-hover:shadow-[0_0_20px_rgba(33,206,153,0.3)]">
+                    <Plus size={32} className="text-gray-500 group-hover:text-[#21ce99] transition-colors" />
                 </div>
-                <div>
-                    <h3 className="text-white font-bold">No Active Units</h3>
-                    <p className="text-sm text-gray-500">Deploy your first trading room to begin.</p>
+                
+                <div className="text-center">
+                    <h3 className="text-gray-500 font-bold group-hover:text-white transition-colors uppercase tracking-widest text-xs">Deploy Unit</h3>
+                    <p className="text-[10px] text-gray-600 group-hover:text-[#21ce99]/70 mt-1 transition-colors">Create new trading room</p>
                 </div>
+
             </div>
-        )}
+        </motion.div>
+
       </div>
     </div>
   );

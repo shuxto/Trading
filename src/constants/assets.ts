@@ -101,14 +101,61 @@ export const ASSETS: Asset[] = [
   { symbol: 'USD/MXN', displaySymbol: 'USD/MXN', name: 'USD / Peso', type: 'forex', price: 0, change: 0, source: 'twelve', logo: 'https://flagcdn.com/w80/mx.png' },
   { symbol: 'USD/TRY', displaySymbol: 'USD/TRY', name: 'USD / Lira', type: 'forex', price: 0, change: 0, source: 'twelve', logo: 'https://flagcdn.com/w80/tr.png' },
 
+// ==========================================
+  // 🧠 SMART INDICES (ETF PROXIES - INCLUDED IN PLAN)
+  // We use ETFs (SPY, QQQ) because they track the index 1:1 
+  // but are classified as "Stocks" by TwelveData (Cheaper/Free).
   // ==========================================
-  // 📈 INDICES (Source: TWELVE DATA)
-  // ==========================================
-  { symbol: 'SPX', displaySymbol: 'S&P 500', name: 'S&P 500 Index', type: 'index', price: 0, change: 0, source: 'twelve', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/S%26P_Standard_and_Poor%27s_logo.svg/1200px-S%26P_Standard_and_Poor%27s_logo.svg.png' },
-  { symbol: 'IXIC', displaySymbol: 'NASDAQ', name: 'Nasdaq Composite', type: 'index', price: 0, change: 0, source: 'twelve', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Nasdaq_Logo.svg/1200px-Nasdaq_Logo.svg.png' },
-  { symbol: 'DJI', displaySymbol: 'DOW 30', name: 'Dow Jones', type: 'index', price: 0, change: 0, source: 'twelve', logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e8/Dow_Jones_Industrial_Average_Logo.png' },
-  { symbol: 'GDAXI', displaySymbol: 'DAX 40', name: 'DAX Performance', type: 'index', price: 0, change: 0, source: 'twelve', logo: 'https://flagcdn.com/w80/de.png' },
-  { symbol: 'FTSE', displaySymbol: 'FTSE 100', name: 'FTSE 100 Index', type: 'index', price: 0, change: 0, source: 'twelve', logo: 'https://flagcdn.com/w80/gb.png' },
+  { 
+    symbol: 'SPY', 
+    displaySymbol: 'S&P 500', 
+    name: 'SPDR S&P 500 ETF', 
+    type: 'index', 
+    price: 0, 
+    change: 0, 
+    source: 'twelve', 
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/S%26P_Standard_and_Poor%27s_logo.svg/1200px-S%26P_Standard_and_Poor%27s_logo.svg.png' 
+  },
+  { 
+    symbol: 'QQQ', 
+    displaySymbol: 'NASDAQ 100', 
+    name: 'Invesco QQQ Trust', 
+    type: 'index', 
+    price: 0, 
+    change: 0, 
+    source: 'twelve', 
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Nasdaq_Logo.svg/1200px-Nasdaq_Logo.svg.png' 
+  },
+  { 
+    symbol: 'DIA', 
+    displaySymbol: 'DOW 30', 
+    name: 'SPDR Dow Jones ETF', 
+    type: 'index', 
+    price: 0, 
+    change: 0, 
+    source: 'twelve', 
+    logo: 'https://upload.wikimedia.org/wikipedia/commons/e/e8/Dow_Jones_Industrial_Average_Logo.png' 
+  },
+  { 
+    symbol: 'DAX', 
+    displaySymbol: 'DAX 40', 
+    name: 'Global X DAX Germany ETF', 
+    type: 'index', 
+    price: 0, 
+    change: 0, 
+    source: 'twelve', 
+    logo: 'https://flagcdn.com/w80/de.png' 
+  },
+  { 
+    symbol: 'EWU', 
+    displaySymbol: 'FTSE 100', 
+    name: 'iShares UK ETF (FTSE Proxy)', 
+    type: 'index', 
+    price: 0, 
+    change: 0, 
+    source: 'twelve', 
+    logo: 'https://flagcdn.com/w80/gb.png' 
+  },
 
   // ==========================================
   // ⛏️ COMMODITIES (Source: TWELVE DATA)

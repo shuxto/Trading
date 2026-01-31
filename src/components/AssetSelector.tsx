@@ -85,49 +85,50 @@ const AssetRow = ({ asset, onSelect }: { asset: Asset; onSelect: (a: Asset) => v
 export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelectorProps) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [search, setSearch] = useState('');
-  const [liveAssets, setLiveAssets] = useState<Asset[]>(ASSETS);
+  const [liveAssets, setLiveAssets] = useState<Asset[]>(ASSETS); 
 
+  // ⚡ FAST LOAD: Cache-First Strategy
   useEffect(() => {
     if (!isOpen) return;
 
     const fetchMarketData = async () => {
-      // 1. 🛑 CHECK CACHE FIRST
+      let shouldFetch = true;
+
+      // 1. INSTANT LOAD (Show cache immediately)
       const cachedData = localStorage.getItem(CACHE_KEY);
       if (cachedData) {
         try {
           const { timestamp, data } = JSON.parse(cachedData);
+          setLiveAssets(data); // <--- Show old prices instantly
+
           const age = Date.now() - timestamp;
-          
+          // If cache is fresh (< 1 min), we don't even need to fetch
           if (age < CACHE_DURATION) {
-            console.log(`[AssetSelector] Loading from Cache (${Math.round(age/1000)}s old)`);
-            setLiveAssets(data);
-            return; // ✅ EXIT: Don't fetch from API
+            console.log(`[AssetSelector] Cache is fresh (${Math.round(age/1000)}s). Skipping network.`);
+            shouldFetch = false;
           }
         } catch (e) {
-          console.error("Cache parsing error", e);
           localStorage.removeItem(CACHE_KEY);
         }
       }
 
-      console.log("[AssetSelector] Cache expired or empty. Fetching live data...");
+      // If cache is fresh, stop here.
+      if (!shouldFetch) return;
 
+      // 2. SILENT BACKGROUND FETCH
       try {
         const symbols = ASSETS.map(a => a.symbol).join(',');
         
-        // 2. 🌍 FETCH LIVE (Only if cache failed/expired)
         const { data, error } = await supabase.functions.invoke('market-proxy', {
             body: {
                 endpoint: 'quote', 
-                params: { 
-                    symbol: symbols,
-                    dp: 4 
-                }
+                params: { symbol: symbols, dp: 4 }
             }
         });
 
         if (error) throw error;
 
-        // 3. 💾 UPDATE STATE & SAVE TO CACHE
+        // 3. UPDATE UI WHEN READY
         if (data && !data.code) {
           const updatedAssets = ASSETS.map(asset => {
             const update = data[asset.symbol] || (data.symbol === asset.symbol ? data : null);
@@ -143,7 +144,6 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
 
           setLiveAssets(updatedAssets);
           
-          // Save to LocalStorage
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             timestamp: Date.now(),
             data: updatedAssets
@@ -156,7 +156,7 @@ export default function AssetSelector({ isOpen, onClose, onSelect }: AssetSelect
 
     fetchMarketData();
 
-    // 4. Real-time updates (Optional - Runs on top of cache)
+    // 4. Real-time updates (Optional)
     const channel = supabase.channel('market_prices');
     channel.on('broadcast', { event: 'price_update' }, (payload) => {
         const update = payload.payload;
