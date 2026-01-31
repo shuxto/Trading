@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { ArrowRightLeft, ArrowDownLeft, ArrowUpRight, ChevronDown, Briefcase, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { 
+    ArrowRightLeft, ArrowDownLeft, ChevronDown, Briefcase, 
+    Loader2, ShieldAlert, Headphones, CreditCard, Bitcoin, Landmark, HelpCircle, 
+    ArrowLeft
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
@@ -20,68 +24,161 @@ interface Props {
 export default function ActionPanel({
   activeSection, setActiveSection, amount, setAmount, loading,
   accounts, selectedAccount, setSelectedAccount,
-  direction, setDirection, handleInternalTransfer, handleExternalRequest // ✅ FIXED: Added this
+  direction, setDirection, handleInternalTransfer, handleExternalRequest
 }: Props) {
   
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [depositMethod, setDepositMethod] = useState<'card' | 'crypto' | 'wire' | 'other' | null>(null);
 
-  // Wrapper to be safe (optional, but good for debugging)
+  // Reset local state when section changes
+  useEffect(() => {
+      setDepositMethod(null);
+      setAmount('');
+  }, [activeSection]);
+
   const onConfirmExternal = () => {
       handleExternalRequest();
   };
 
   return (
-    <div className="bg-[#151a21] border border-white/10 rounded-[20px] p-1 flex flex-col h-[340px] shadow-2xl relative overflow-hidden">
+    <div className="bg-[#151a21] border border-white/10 rounded-[20px] p-1 flex flex-col h-[360px] shadow-2xl relative overflow-hidden">
         {/* Scanline Effect */}
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(0deg, transparent 24%, rgba(33, 206, 153, .3) 25%, rgba(33, 206, 153, .3) 26%, transparent 27%, transparent 74%, rgba(33, 206, 153, .3) 75%, rgba(33, 206, 153, .3) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(33, 206, 153, .3) 25%, rgba(33, 206, 153, .3) 26%, transparent 27%, transparent 74%, rgba(33, 206, 153, .3) 75%, rgba(33, 206, 153, .3) 76%, transparent 77%, transparent)', backgroundSize: '30px 30px' }} />
 
         <div className="bg-[#1e232d]/50 backdrop-blur-sm h-full rounded-[18px] p-6 flex flex-col relative z-10">
-        {activeSection !== 'transfer' ? (
-            // --- DEPOSIT / WITHDRAW FORM ---
+        
+        {/* ===================================================================================== */}
+        {/* 1. WITHDRAWAL VIEW (Contact Agent)                                                    */}
+        {/* ===================================================================================== */}
+        {activeSection === 'withdrawal' && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="font-black text-white uppercase tracking-wider flex items-center gap-2 text-lg">
-                        {activeSection === 'deposit' ? <ArrowDownLeft className="text-[#21ce99]" /> : <ArrowUpRight className="text-[#f23645]" />}
-                        {activeSection === 'deposit' ? 'Incoming Transfer' : 'Outgoing Transfer'}
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-black text-[#f23645] uppercase tracking-wider flex items-center gap-2 text-lg">
+                        <ShieldAlert size={20} /> Withdrawal Locked
                     </h3>
-                    <button onClick={() => { setActiveSection('transfer'); setAmount(''); }} className="text-[10px] bg-white/5 hover:bg-white/10 px-3 py-1 rounded text-gray-400 hover:text-white transition-colors uppercase tracking-widest font-bold">
+                    <button onClick={() => setActiveSection('transfer')} className="text-[10px] bg-white/5 hover:bg-white/10 px-3 py-1 rounded text-gray-400 hover:text-white transition-colors uppercase tracking-widest font-bold">
                         Cancel
                     </button>
                 </div>
 
-                <div className="flex-1 flex flex-col justify-center">
-                    <p className="text-xs text-[#8b9bb4] mb-4 leading-relaxed font-mono">
-                        {activeSection === 'deposit' 
-                        ? "> INITIATE SECURE DEPOSIT PROTOCOL. FUNDS WILL BE HELD IN ESCROW UNTIL VERIFIED."
-                        : "> INITIATE WITHDRAWAL SEQUENCE. REQUEST SUBJECT TO ADMIN APPROVAL."}
-                    </p>
-                    <div className="relative group">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono text-lg">$</span>
-                        <input 
-                            type="number" 
-                            value={amount} 
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="0.00" 
-                            className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-4 pl-8 pr-4 text-white font-mono text-xl font-bold focus:border-[#21ce99] focus:shadow-[0_0_20px_rgba(33,206,153,0.1)] outline-none transition-all placeholder-gray-700"
-                            autoFocus
-                        />
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                    <div className="p-4 bg-[#f23645]/10 rounded-full border border-[#f23645]/20 shadow-[0_0_30px_rgba(242,54,69,0.15)]">
+                        <Headphones size={40} className="text-[#f23645]" />
+                    </div>
+                    <div className="space-y-2">
+                        <h4 className="text-white font-bold text-sm uppercase tracking-wide">Manual Processing Required</h4>
+                        <p className="text-xs text-gray-400 leading-relaxed max-w-[250px] mx-auto">
+                            For security purposes, withdrawals must be verified by your account manager.
+                        </p>
+                    </div>
+                    <div className="bg-[#0b0e11] px-4 py-2 rounded-lg border border-white/5 text-[10px] text-gray-500 font-mono">
+                        STATUS: <span className="text-[#f23645]">RESTRICTED</span>
                     </div>
                 </div>
-
-                <button 
-                    onClick={onConfirmExternal} 
-                    disabled={loading || !amount} 
-                    className={`w-full font-black py-4 rounded-xl mt-auto transition-all disabled:opacity-50 uppercase tracking-widest text-xs flex items-center justify-center gap-2 ${
-                    activeSection === 'deposit' 
-                        ? 'bg-gradient-to-r from-[#21ce99] to-[#1db586] text-[#0b0e11] hover:shadow-[0_0_20px_rgba(33,206,153,0.3)]' 
-                        : 'bg-gradient-to-r from-[#f23645] to-[#d12c39] text-white hover:shadow-[0_0_20px_rgba(242,54,69,0.3)]'
-                    }`}
-                >
-                    {loading ? <Loader2 className="animate-spin" size={16} /> : `CONFIRM ${activeSection === 'deposit' ? 'DEPOSIT' : 'WITHDRAWAL'}`}
-                </button>
             </motion.div>
-        ) : (
-            // --- INTERNAL TRANSFER FORM ---
+        )}
+
+        {/* ===================================================================================== */}
+        {/* 2. DEPOSIT VIEW                                                                       */}
+        {/* ===================================================================================== */}
+        {activeSection === 'deposit' && (
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-black text-[#21ce99] uppercase tracking-wider flex items-center gap-2 text-lg">
+                        <ArrowDownLeft size={20} /> Deposit Funds
+                    </h3>
+                    <button onClick={() => { setActiveSection('transfer'); setDepositMethod(null); }} className="text-[10px] bg-white/5 hover:bg-white/10 px-3 py-1 rounded text-gray-400 hover:text-white transition-colors uppercase tracking-widest font-bold">
+                        Cancel
+                    </button>
+                </div>
+
+                {!depositMethod ? (
+                    // 2a. METHOD SELECTION
+                    <div className="flex-1 grid grid-cols-2 gap-3 content-center">
+                        {[
+                            { id: 'card', label: 'Bank Card', icon: <CreditCard size={20} />, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+                            { id: 'crypto', label: 'Crypto', icon: <Bitcoin size={20} />, color: 'text-[#F0B90B]', bg: 'bg-[#F0B90B]/10' },
+                            { id: 'wire', label: 'Wire Transfer', icon: <Landmark size={20} />, color: 'text-purple-400', bg: 'bg-purple-400/10' },
+                            { id: 'other', label: 'Other', icon: <HelpCircle size={20} />, color: 'text-gray-400', bg: 'bg-gray-400/10' }
+                        ].map((item) => {
+                            // 👇 CHECK: Disable Card & Crypto for now
+                            const isInactive = item.id === 'card' || item.id === 'crypto';
+                            
+                            return (
+                                <button 
+                                    key={item.id}
+                                    disabled={isInactive} // Disable button
+                                    onClick={() => setDepositMethod(item.id as any)}
+                                    className={`flex flex-col items-center justify-center gap-3 p-4 bg-[#0b0e11] border border-white/5 rounded-xl transition-all group ${
+                                        isInactive 
+                                            ? 'opacity-40 cursor-not-allowed grayscale' // Inactive styling
+                                            : 'hover:border-[#21ce99]/50 hover:bg-[#21ce99]/5' // Active styling
+                                    }`}
+                                >
+                                    <div className={`p-3 rounded-full ${item.bg} ${item.color} ${!isInactive && 'group-hover:scale-110'} transition-transform`}>
+                                        {item.icon}
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-400 group-hover:text-white uppercase tracking-wider">{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (depositMethod === 'wire' || depositMethod === 'other') ? (
+                    // 2b. CONTACT AGENT MESSAGE (Wire/Other)
+                    <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                        <div className="p-4 bg-purple-500/10 rounded-full border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+                            <Landmark size={40} className="text-purple-400" />
+                        </div>
+                        <div className="space-y-2">
+                            <h4 className="text-white font-bold text-sm uppercase tracking-wide">Agent Assistance Required</h4>
+                            <p className="text-xs text-gray-400 leading-relaxed max-w-[250px] mx-auto">
+                                Please contact support to receive the latest banking details or alternative instructions.
+                            </p>
+                        </div>
+                        <button onClick={() => setDepositMethod(null)} className="flex items-center gap-2 text-[10px] text-gray-500 hover:text-white transition-colors">
+                            <ArrowLeft size={12} /> Back to Methods
+                        </button>
+                    </div>
+                ) : (
+                    // 2c. AMOUNT INPUT (Fallback - Currently unreachable due to disable)
+                    <div className="flex-1 flex flex-col">
+                        <button onClick={() => setDepositMethod(null)} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white mb-4 w-fit">
+                            <ArrowLeft size={10} /> Back
+                        </button>
+                        
+                        <div className="flex-1 flex flex-col justify-center">
+                            <p className="text-xs text-[#8b9bb4] mb-4 leading-relaxed font-mono">
+                                {'>'} ENTER AMOUNT FOR {depositMethod === 'card' ? 'CARD' : 'CRYPTO'} DEPOSIT.
+                            </p>
+                            <div className="relative group">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono text-lg">$</span>
+                                <input 
+                                    type="number" 
+                                    value={amount} 
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="0.00" 
+                                    className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-4 pl-8 pr-4 text-white font-mono text-xl font-bold focus:border-[#21ce99] focus:shadow-[0_0_20px_rgba(33,206,153,0.1)] outline-none transition-all placeholder-gray-700"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={onConfirmExternal} 
+                            disabled={loading || !amount} 
+                            className="w-full bg-gradient-to-r from-[#21ce99] to-[#1db586] text-[#0b0e11] font-black py-4 rounded-xl mt-auto transition-all disabled:opacity-50 uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:shadow-[0_0_20px_rgba(33,206,153,0.3)]"
+                        >
+                            {loading ? <Loader2 className="animate-spin" size={16} /> : `CONFIRM ${depositMethod} DEPOSIT`}
+                        </button>
+                    </div>
+                )}
+            </motion.div>
+        )}
+
+        {/* ===================================================================================== */}
+        {/* 3. INTERNAL TRANSFER VIEW                                                             */}
+        {/* ===================================================================================== */}
+        {activeSection === 'transfer' && (
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col h-full">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="p-2 bg-[#F0B90B]/10 rounded-lg text-[#F0B90B]">
