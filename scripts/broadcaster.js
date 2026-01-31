@@ -33,12 +33,33 @@ const io = new Server(httpServer, {
 // We keep all open trades in RAM for instant access (0ms latency lookup)
 let activeTrades = new Map(); 
 
+
+// ✅ UPDATED: Exact match with src/constants/assets.ts (104 Assets)
+// Your Pro Plan allows 500 connections. We are using 104. You are SAFE.
 const SYMBOLS = [
-    "BTC/USD", "ETH/USD", "SOL/USD", "XRP/USD", "BNB/USD", "DOGE/USD", 
-    "ADA/USD", "AVAX/USD", "MATIC/USD", "DOT/USD", "LTC/USD", "SHIB/USD",
-    "EUR/USD", "GBP/USD", "USD/JPY", "USD/CAD", "AUD/USD", "USD/CHF", 
-    "SPX", "NDX", "DJI", "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", 
-    "GOOGL", "META", "NFLX", "AMD", "COIN", "GME", "AMC"
+    // 1. CRYPTO (35)
+    "BTC/USD", "ETH/USD", "SOL/USD", "BNB/USD", "XRP/USD", "ADA/USD", "DOGE/USD", 
+    "AVAX/USD", "DOT/USD", "LINK/USD", "MATIC/USD", "LTC/USD", "UNI/USD", "TRX/USD", 
+    "SHIB/USD", "ETC/USD", "NEAR/USD", "ATOM/USD", "XLM/USD", "BCH/USD", "ALGO/USD", 
+    "FIL/USD", "VET/USD", "ICP/USD", "GRT/USD", "AAVE/USD", "SAND/USD", "MANA/USD", 
+    "AXS/USD", "EOS/USD", "THETA/USD", "RUNE/USD", "KSM/USD", "EGLD/USD", "XTZ/USD",
+
+    // 2. STOCKS (30)
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD", "INTC", 
+    "CRM", "ADBE", "PYPL", "UBER", "ABNB", "COIN", "PLTR", "JPM", "V", "MA", "WMT", 
+    "KO", "PEP", "MCD", "NKE", "TSM", "ASML", "BABA", "SONY", "TM",
+
+    // 3. FOREX (22)
+    "EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "USD/CAD", "NZD/USD", 
+    "EUR/GBP", "EUR/JPY", "EUR/CHF", "GBP/JPY", "GBP/AUD", "GBP/CAD", "AUD/JPY", 
+    "AUD/CAD", "CAD/JPY", "CHF/JPY", "USD/SGD", "USD/HKD", "USD/ZAR", "USD/MXN", "USD/TRY",
+
+    // 4. SMART INDICES / ETFs (5)
+    "SPY", "QQQ", "DIA", "DAX", "EWU",
+
+    // 5. COMMODITIES (12)
+    "XAU/USD", "XAG/USD", "XPT/USD", "XPD/USD", "XCU/USD", "WTI", "BRENT", "NG", 
+    "CORN", "WEAT", "SOYB", "CANE"
 ];
 
 console.log("[Tower] 🟡 Starting Smart Tower...");
