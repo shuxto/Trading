@@ -3,38 +3,50 @@ import { supabase } from '../../lib/supabase';
 import { 
     ArrowLeft, Wallet, ArrowDownLeft, Gift, History, CheckCircle, XCircle, 
     Loader2, UserCog, Shield, CreditCard, Hash, Globe, Copy, Check, ArrowUpRight,
-    Landmark, Bitcoin, CreditCard as CardIcon, HelpCircle, AlertOctagon
+    Landmark, Bitcoin, CreditCard as CardIcon, HelpCircle, AlertOctagon,
+    ArrowRightLeft, ChevronLeft, ChevronRight // Added Icons for Pagination
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ClientTradingAccounts from './ClientTradingAccounts';
 
 interface ClientDetailProps {
   user: any;
   transactions: any[];
   onBack: () => void;
-  // Updated type to include 'remove'
   onManageFunds: (userId: string, amount: number, type: 'deposit' | 'withdrawal' | 'bonus' | 'remove', transactionId?: number, method?: string) => Promise<void>;
   currentUserRole?: string;
 }
 
 export default function ClientDetail({ user, transactions = [], onBack, onManageFunds, currentUserRole }: ClientDetailProps) {
   const [actionAmount, setActionAmount] = useState('');
-  // Added 'remove' to allowed actions
   const [activeAction, setActiveAction] = useState<'deposit' | 'bonus' | 'withdrawal' | 'remove' | null>(null);
-  
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  
   const [totalEquity, setTotalEquity] = useState<number>(user.balance || 0);
 
+  // PAGINATION STATE
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // PROCESS HISTORY
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
-  const history = safeTransactions.filter(t => t.user_id === user.id);
+  const fullHistory = safeTransactions
+    .filter(t => t.user_id === user.id)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  // CALCULATE PAGINATION
+  const totalPages = Math.ceil(fullHistory.length / itemsPerPage);
+  const paginatedHistory = fullHistory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const ALLOWED_ROLES = ['admin', 'compliance', 'manager', 'retention'];
   const canViewStaff = ALLOWED_ROLES.includes(currentUserRole || '');
 
-  // 1. FETCH TOTAL EQUITY
+  // FETCH TOTAL EQUITY
   useEffect(() => {
     const fetchEquity = async () => {
         const { data: accounts } = await supabase
@@ -48,17 +60,35 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
     fetchEquity();
   }, [user.id, user.balance, transactions]);
 
+  // HELPER TO REFRESH DATA
+  const refreshData = async () => {
+      const { data: accounts } = await supabase
+          .from('trading_accounts')
+          .select('balance')
+          .eq('user_id', user.id);
+      
+      const { data: profile } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', user.id)
+          .single();
+
+      const tradingBalance = accounts?.reduce((acc, curr) => acc + (curr.balance || 0), 0) || 0;
+      const mainBalance = profile?.balance || 0;
+      
+      setTotalEquity(mainBalance + tradingBalance);
+      user.balance = mainBalance; 
+  };
+
   const handleExecute = async () => {
       if (!actionAmount || !activeAction) return;
       
-      // Require Method ONLY for Deposits
       const methodToUse = activeAction === 'deposit' ? selectedMethod : 'System Adjustment';
       if (activeAction === 'deposit' && !methodToUse) return;
 
       setLoading(true);
       try {
         await onManageFunds(user.id, parseFloat(actionAmount), activeAction, undefined, methodToUse || 'Manual');
-        // Reset only on success (or let AdminPanel handle error)
         setActionAmount('');
         setActiveAction(null);
         setSelectedMethod(null);
@@ -93,7 +123,7 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
       {/* CONTENT */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 min-h-0">
           
-          {/* ACTION ROW */}
+          {/* 1. ACTION ROW (Balance & Buttons) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
               
               {/* BALANCE CARD */}
@@ -132,7 +162,6 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                           <ArrowUpRight size={12} /> Withdraw
                       </button>
 
-                      {/* FORCE REMOVE BUTTON */}
                       <button 
                           onClick={() => { setActiveAction('remove'); setSelectedMethod(null); }} 
                           className={`px-3 py-2 rounded-lg font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 transition-all border ${activeAction === 'remove' ? 'bg-red-900 text-white border-red-500' : 'bg-[#1e232d] text-red-500 border-red-900/30 hover:bg-red-900/20'}`}
@@ -143,11 +172,9 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                   </div>
               </div>
 
-              {/* INPUT AREA (Dynamic) */}
+              {/* INPUT AREA */}
               <div className="lg:col-span-5 bg-[#151a21] rounded-xl border border-[#2a2e39] flex flex-col justify-center min-h-[100px] relative overflow-hidden">
                   <AnimatePresence mode="wait">
-                      
-                      {/* STATE 1: DEPOSIT METHOD SELECTION */}
                       {activeAction === 'deposit' && !selectedMethod ? (
                           <motion.div 
                               key="methods"
@@ -174,8 +201,6 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                               </div>
                           </motion.div>
                       ) : activeAction ? (
-                          
-                          /* STATE 2: AMOUNT INPUT */
                           <motion.div 
                               key="input" 
                               initial={{ opacity: 0 }} 
@@ -183,7 +208,6 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                               exit={{ opacity: 0 }} 
                               className="px-4 py-3 flex flex-col gap-2"
                           >
-                              {/* Headers for different actions */}
                               <div className="flex justify-between items-center">
                                   {activeAction === 'deposit' && (
                                       <div onClick={() => setSelectedMethod(null)} className="text-[9px] text-[#21ce99] font-bold uppercase tracking-widest cursor-pointer hover:underline flex items-center gap-1">
@@ -224,8 +248,6 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                               </div>
                           </motion.div>
                       ) : (
-                          
-                          /* STATE 0: IDLE */
                           <div className="flex items-center justify-center gap-2 text-gray-600 text-[10px] font-bold uppercase tracking-widest h-full">
                               <Wallet size={16} /> Select Action
                           </div>
@@ -234,9 +256,26 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
               </div>
           </div>
 
-          {/* LEDGER */}
+          {/* 2. TRADING ACCOUNTS (Moved to Top) */}
+          <ClientTradingAccounts 
+              userId={user.id} 
+              onUpdate={refreshData} 
+          />
+
+          {/* 3. LEDGER (History with Pagination) */}
           <div className="bg-[#151a21] rounded-xl border border-[#2a2e39] overflow-hidden shadow-lg flex-1 flex flex-col min-h-0">
-              <div className="p-3 border-b border-[#2a2e39] bg-[#191f2e]/50 flex items-center gap-2"><History size={14} className="text-[#21ce99]"/><h3 className="text-[10px] font-black text-white uppercase tracking-widest">Transaction History</h3></div>
+              <div className="p-3 border-b border-[#2a2e39] bg-[#191f2e]/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <History size={14} className="text-[#21ce99]"/>
+                    <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Transaction History</h3>
+                </div>
+                
+                {/* Pagination Stats */}
+                <div className="text-[9px] text-gray-500 font-mono">
+                    Showing {paginatedHistory.length} of {fullHistory.length}
+                </div>
+              </div>
+
               <div className="overflow-auto custom-scrollbar flex-1">
                   <table className="w-full text-left text-xs">
                       <thead className="bg-[#0b0e11] text-gray-500 uppercase font-bold text-[9px] tracking-widest sticky top-0 z-10">
@@ -244,14 +283,18 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                               <th className="p-3 pl-4">TX ID</th>
                               <th className="p-3">Time</th>
                               <th className="p-3">Type</th>
-                              <th className="p-3">Method</th> 
-                              {canViewStaff && <th className="p-3">Staff / Performer</th>} 
+                              <th className="p-3">Method / Details</th> 
+                              {canViewStaff && <th className="p-3">Performed By</th>} 
                               <th className="p-3 text-right">Amount</th>
                               <th className="p-3 text-center">Status</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-[#2a2e39]">
-                          {history.map(tx => (
+                          {paginatedHistory.map(tx => {
+                            const isTransfer = tx.method && (tx.method.includes('->') || tx.method.includes('Transfer'));
+                            const isDeposit = ['deposit', 'bonus', 'external_deposit', 'profit'].includes(tx.type) || (isTransfer && tx.type === 'deposit');
+
+                            return (
                               <tr key={tx.id} className="hover:bg-[#2a2e39]/30 transition-colors">
                                   {/* TX ID */}
                                   <td className="p-3 pl-4 text-gray-500 font-mono text-[10px]"><div className="flex items-center gap-1"><Hash size={10} />{tx.id}</div></td>
@@ -261,24 +304,30 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                                   
                                   {/* TYPE */}
                                   <td className="p-3">
-                                      <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded border ${
-                                          tx.type === 'bonus' ? 'bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20' : 
-                                          ['withdraw', 'withdrawal', 'remove'].includes(tx.type) ? 'bg-[#f23645]/10 text-[#f23645] border-[#f23645]/20' : 
-                                          'bg-[#21ce99]/10 text-[#21ce99] border-[#21ce99]/20'
-                                      }`}>
-                                          {tx.type.replace('external_', '')}
-                                      </span>
+                                      {isTransfer ? (
+                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold uppercase text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1 w-fit">
+                                          <ArrowRightLeft size={8} /> TRANSFER
+                                        </span>
+                                      ) : (
+                                        <span className={`font-bold uppercase text-[9px] px-1.5 py-0.5 rounded border ${
+                                            tx.type === 'bonus' ? 'bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20' : 
+                                            isDeposit ? 'bg-[#21ce99]/10 text-[#21ce99] border-[#21ce99]/20' :
+                                            'bg-[#f23645]/10 text-[#f23645] border-[#f23645]/20'
+                                        }`}>
+                                            {tx.type.replace('external_', '')}
+                                        </span>
+                                      )}
                                   </td>
                                   
                                   {/* METHOD */}
                                   <td className="p-3">
                                       <div className="flex items-center gap-1.5 text-[10px]">
-                                          <Globe size={12} className="text-blue-400" />
+                                          <Globe size={12} className={isTransfer ? "text-blue-400" : "text-gray-500"} />
                                           <span className="text-gray-300 font-bold uppercase">{tx.method || 'System / Wire'}</span>
                                       </div>
                                   </td>
 
-                                  {/* STAFF (Restricted) */}
+                                  {/* STAFF */}
                                   {canViewStaff && (
                                       <td className="p-3">
                                           <div className="flex items-center gap-1.5 text-[10px]">
@@ -313,17 +362,46 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
                                   )}
 
                                   {/* AMOUNT */}
-                                  <td className={`p-3 text-right font-mono font-bold ${['deposit', 'bonus', 'external_deposit'].includes(tx.type) ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>{['deposit', 'bonus', 'external_deposit'].includes(tx.type) ? '+' : '-'}${tx.amount.toLocaleString()}</td>
+                                  <td className={`p-3 text-right font-mono font-bold ${isDeposit ? 'text-[#21ce99]' : 'text-[#f23645]'}`}>
+                                    {isDeposit ? '+' : '-'}${tx.amount.toLocaleString()}
+                                  </td>
                                   
                                   {/* STATUS */}
                                   <td className="p-3 text-center">{tx.status === 'approved' ? <CheckCircle size={14} className="text-[#21ce99] mx-auto" /> : tx.status === 'pending' ? <Loader2 size={14} className="text-[#F0B90B] animate-spin mx-auto" /> : <XCircle size={14} className="text-[#f23645] mx-auto" />}</td>
                               </tr>
-                          ))}
+                            );
+                          })}
                       </tbody>
                   </table>
-                  {history.length === 0 && <div className="p-8 text-center text-gray-600 font-mono text-[10px] uppercase tracking-widest">No records found</div>}
+                  {fullHistory.length === 0 && <div className="p-8 text-center text-gray-600 font-mono text-[10px] uppercase tracking-widest">No records found</div>}
               </div>
+
+              {/* PAGINATION CONTROLS (Only if needed) */}
+              {totalPages > 1 && (
+                <div className="p-2 border-t border-[#2a2e39] bg-[#0b0e11] flex items-center justify-between">
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-lg bg-[#1e232d] border border-[#2a2e39] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                        <ChevronLeft size={16} />
+                    </button>
+
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                        Page {currentPage} of {totalPages}
+                    </span>
+
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-lg bg-[#1e232d] border border-[#2a2e39] text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+              )}
           </div>
+
       </div>
     </div>
   );
