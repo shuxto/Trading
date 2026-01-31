@@ -329,6 +329,121 @@ export default function App() {
     }
   };
 
+  // --- 4. REALTIME TRADES SYNC (FIXED: NO DOUBLE BUYS) ---
+  useEffect(() => {
+    if (!activeAccount) return;
+
+    // Listen for ANY change in the 'trades' table for this account
+    const channel = supabase
+      .channel('realtime-trades')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'trades',
+          filter: `account_id=eq.${activeAccount.id}`, // Only for the current account
+        },
+        (payload) => {
+          // 1. HANDLE NEW TRADE (INSERT)
+          if (payload.eventType === 'INSERT') {
+            const newTrade = payload.new as any;
+            
+            setOrders((prev) => {
+              // A. Strict Duplicate Check: If we already have this exact ID, stop.
+              if (prev.some((o) => o.id === newTrade.id)) return prev;
+
+              // B. "Ghost" Check (The Fix for Double Buys):
+              // Look for a 'pending' trade that looks exactly like this new real one
+              const pendingMatchIndex = prev.findIndex(o => 
+                  o.status === 'pending' &&
+                  o.symbol === newTrade.symbol &&
+                  o.type === newTrade.type &&
+                  // Check if size is roughly the same (handles floating point tiny diffs)
+                  Math.abs(o.size - newTrade.size) < 0.01 
+              );
+
+              // Convert DB format to App format
+              const formattedOrder: Order = {
+                id: newTrade.id,
+                account_id: newTrade.account_id,
+                symbol: newTrade.symbol,
+                type: newTrade.type,
+                entryPrice: newTrade.entry_price,
+                size: newTrade.size,
+                leverage: newTrade.leverage,
+                margin: newTrade.size / newTrade.leverage,
+                status: newTrade.status,
+                takeProfit: newTrade.take_profit,
+                stopLoss: newTrade.stop_loss,
+                liquidationPrice: newTrade.liquidation_price || 0,
+              };
+
+              // SCENARIO 1: We found a matching "Pending" trade. REPLACE IT.
+              if (pendingMatchIndex !== -1) {
+                  const newOrders = [...prev];
+                  newOrders[pendingMatchIndex] = formattedOrder;
+                  return newOrders;
+              }
+
+              // SCENARIO 2: No match found. It's a new trade. ADD IT.
+              if (newTrade.status === 'open') {
+                return [formattedOrder, ...prev];
+              }
+              return prev;
+            });
+          }
+
+          // 2. HANDLE UPDATES (Close, SL/TP Change)
+          if (payload.eventType === 'UPDATE') {
+            const updatedTrade = payload.new as any;
+
+            if (updatedTrade.status === 'closed') {
+               // Move from Orders to History
+               setOrders((prev) => prev.filter((o) => o.id !== updatedTrade.id));
+               
+               // Add to History (Top of list)
+               const historyItem: Order = {
+                 id: updatedTrade.id,
+                 account_id: updatedTrade.account_id,
+                 symbol: updatedTrade.symbol,
+                 type: updatedTrade.type,
+                 entryPrice: updatedTrade.entry_price,
+                 exitPrice: updatedTrade.exit_price,
+                 size: updatedTrade.size,
+                 leverage: updatedTrade.leverage,
+                 margin: updatedTrade.size / updatedTrade.leverage,
+                 status: 'closed',
+                 pnl: updatedTrade.pnl,
+                 closedAt: updatedTrade.closed_at,
+                 liquidationPrice: 0
+               };
+               setHistory((prev) => [historyItem, ...prev]);
+               refreshAccountBalance(); // Update balance immediately
+            } else {
+               // Just an update (like editing SL/TP)
+               setOrders((prev) => 
+                 prev.map((o) => o.id === updatedTrade.id 
+                   ? { 
+                       ...o, 
+                       takeProfit: updatedTrade.take_profit, 
+                       stopLoss: updatedTrade.stop_loss,
+                       liquidationPrice: updatedTrade.liquidation_price 
+                     } 
+                   : o
+                 )
+               );
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeAccount]);
+
   // ✅ 4. AUTO-CLOSE ENGINE (FIXED & SAFER)
   // Now uses 'marketPrices' instead of 'currentPrice'
   const closingRef = useRef<Set<number>>(new Set());
