@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import { io } from "socket.io-client"; // 👈 NEW IMPORT
 
@@ -34,6 +34,7 @@ const DEFAULT_ASSET: ActiveAsset & { type: string } = {
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [role, setRole] = useState<'user' | 'admin' | null>(null);
+  const [tier, setTier] = useState<string>('Basic');
   const [authLoading, setAuthLoading] = useState(true);
 
   // VIEW STATE
@@ -157,9 +158,11 @@ export default function App() {
   };
 
   const checkUser = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    // 🟢 UPDATED: Fetch 'tier' along with 'role'
+    const { data } = await supabase.from('profiles').select('role, tier').eq('id', userId).single();
     if (data) {
       setRole(data.role as 'user' | 'admin');
+      setTier(data.tier || 'Basic'); // 🟢 Save the tier
     }
     setAuthLoading(false);
   };
@@ -446,7 +449,7 @@ export default function App() {
 
   // ✅ 4. AUTO-CLOSE ENGINE (FIXED & SAFER)
   // Now uses 'marketPrices' instead of 'currentPrice'
-  const closingRef = useRef<Set<number>>(new Set());
+  /*const closingRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (orders.length === 0) return;
@@ -488,7 +491,7 @@ export default function App() {
         });
       }
     });
-  }, [marketPrices, orders]); // 👈 Depends on marketPrices now
+  }, [marketPrices, orders]); // 👈 Depends on marketPrices now*/
 
 
   // --- 5. RENDER ---
@@ -554,6 +557,7 @@ export default function App() {
           onTrade={handleTrade} 
           activeAccountId={activeAccount?.id || 0} 
           balance={accountBalance} 
+          userTier={tier} // 🟢 Pass the tier here!
         />
       </div>
       

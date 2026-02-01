@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, ChevronUp, ChevronDown, Loader2, Zap, Settings2, Target, Shield } from "lucide-react"; 
+import { Wallet, ChevronUp, ChevronDown, Loader2, Zap, Settings2, Target, Shield, Lock as LockIcon } from "lucide-react";
 import { useClickSound } from '../hooks/useClickSound';
 import type { Order } from '../types';
 
@@ -10,11 +10,12 @@ interface OrderPanelProps {
   onTrade: (order: Order) => void;
   activeAccountId: number; 
   balance: number; 
+  userTier: string; 
 }
 
 const MMR = 0.005; 
 
-export default function OrderPanel({ currentPrice, activeSymbol, onTrade, activeAccountId, balance }: OrderPanelProps) {
+export default function OrderPanel({ currentPrice, activeSymbol, onTrade, activeAccountId, balance, userTier }: OrderPanelProps) {
   const playClick = useClickSound();
   
   const [tradingMode, setTradingMode] = useState<'spot' | 'futures'>('spot');
@@ -22,6 +23,23 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
   const [margin, setMargin] = useState<number>(100);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 🟢 TIER LOGIC: CALCULATE MAX LEVERAGE
+  const getMaxLeverage = () => {
+     if (['Admin', 'Staff', 'Diamond'].includes(userTier)) return 125; // MAX
+     if (userTier === 'Platinum') return 50;
+     if (userTier === 'Gold') return 30;
+     if (userTier === 'Silver') return 10;
+     return 1; // Basic = LOCKED
+  };
+
+  const maxLeverage = getMaxLeverage();
+  const isLeverageLocked = maxLeverage === 1;
+
+  // 🟢 AUTO-CLAMP: If user downgrades or switches, force leverage down
+  useEffect(() => {
+      if (leverage > maxLeverage) setLeverage(maxLeverage);
+  }, [maxLeverage, leverage]);
 
   const [tpEnabled, setTpEnabled] = useState(false);
   const [slEnabled, setSlEnabled] = useState(false);
@@ -62,8 +80,8 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
   // ⬇️⬇️⬇️ THIS IS THE FIX (Logic Preserved) ⬇️⬇️⬇️
   useEffect(() => {
-     setTpPrice('');
-     setSlPrice('');
+      setTpPrice('');
+      setSlPrice('');
   }, [activeSymbol]);
   // ⬆️⬆️⬆️ END OF FIX ⬆️⬆️⬆️
 
@@ -130,7 +148,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       liquidationPrice: side === 'buy' ? liqPriceLong : liqPriceShort,
       status: 'active',
       takeProfit: finalTp, 
-      stopLoss: finalSl,   
+      stopLoss: finalSl,    
     };
 
     try {
@@ -152,7 +170,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
   return (
     <aside 
-      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-[#151a21] border-t md:border-t-0 md:border-l border-white/10 shadow-2xl transition-all duration-300 ease-in-out ${isMobileExpanded ? 'h-[580px]' : 'h-auto'} md:static md:w-[280px] md:h-full font-sans`}
+      className={`fixed bottom-0 left-0 right-0 z-50 flex flex-col bg-[#151a21] border-t md:border-t-0 md:border-l border-white/10 shadow-xl transition-all duration-300 ease-in-out ${isMobileExpanded ? 'h-[580px]' : 'h-auto'} md:static md:w-[280px] md:h-full font-sans`}
     >
       
       {/* MOBILE TOGGLE */}
@@ -171,12 +189,14 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
 
         {/* TABS */}
         <div className="flex p-1 bg-[#0b0e11] rounded-xl border border-white/10">
-          <button onClick={() => { playClick(); setTradingMode('spot'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all z-10 ${tradingMode === 'spot' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
-            {tradingMode === 'spot' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#21ce99] rounded-lg shadow-[0_0_15px_rgba(33,206,153,0.4)] -z-10" />}
+          <button onClick={() => { playClick(); setTradingMode('spot'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors z-10 ${tradingMode === 'spot' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
+            {/* OPTIMIZED: Reduced shadow spread for performance */}
+            {tradingMode === 'spot' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#21ce99] rounded-lg shadow-md -z-10" />}
             SPOT
           </button>
-          <button onClick={() => { playClick(); setTradingMode('futures'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all z-10 ${tradingMode === 'futures' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
-            {tradingMode === 'futures' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#F0B90B] rounded-lg shadow-[0_0_15px_rgba(240,185,11,0.4)] -z-10" />}
+          <button onClick={() => { playClick(); setTradingMode('futures'); }} className={`relative flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors z-10 ${tradingMode === 'futures' ? 'text-black' : 'text-gray-500 hover:text-white'}`}>
+            {/* OPTIMIZED: Reduced shadow spread for performance */}
+            {tradingMode === 'futures' && <motion.div layoutId="activeTab" className="absolute inset-0 bg-[#F0B90B] rounded-lg shadow-md -z-10" />}
             FUTURES
           </button>
         </div>
@@ -191,13 +211,39 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
                     initial={{ opacity: 0, y: 5 }} 
                     animate={{ opacity: 1, y: 0 }} 
                     exit={{ opacity: 0, y: -5 }} 
+                    transition={{ duration: 0.2 }}
                     className="space-y-2"
                 >
                 <div className="flex justify-between items-center">
                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1"><Zap size={10} /> Leverage</span>
-                    <span className="text-xs font-black text-[#F0B90B] bg-[#F0B90B]/10 px-2 py-0.5 rounded border border-[#F0B90B]/20">{leverage}x</span>
+                    <div className="flex items-center gap-2">
+                         {/* 🟢 USE LockIcon HERE */}
+                         {isLeverageLocked && <LockIcon size={10} className="text-red-500" />}
+                         <span className={`text-xs font-black px-2 py-0.5 rounded border ${isLeverageLocked ? 'text-red-500 bg-red-500/10 border-red-500/20' : 'text-[#F0B90B] bg-[#F0B90B]/10 border-[#F0B90B]/20'}`}>
+                             {leverage}x
+                         </span>
+                    </div>
                 </div>
-                <input type="range" min="1" max="125" step="1" value={leverage} onChange={(e) => setLeverage(Number(e.target.value))} className="w-full h-2 bg-[#0b0e11] rounded-full appearance-none cursor-pointer accent-[#F0B90B] border border-white/5" />
+                
+                {/* 🟢 TIER RESTRICTED SLIDER */}
+                <input 
+                    type="range" 
+                    min="1" 
+                    max={maxLeverage} 
+                    step="1" 
+                    value={leverage} 
+                    disabled={isLeverageLocked}
+                    onChange={(e) => setLeverage(Number(e.target.value))} 
+                    className={`w-full h-2 rounded-full appearance-none cursor-pointer border border-white/5 ${isLeverageLocked ? 'bg-red-900/20 accent-red-500' : 'bg-[#0b0e11] accent-[#F0B90B]'}`} 
+                />
+                
+                {/* 🟢 UPGRADE MESSAGE */}
+                {maxLeverage < 125 && (
+                    <div className="flex justify-between text-[8px] font-bold uppercase tracking-wide">
+                        <span className="text-gray-600">Max: {maxLeverage}x ({userTier})</span>
+                        <span className="text-[#F0B90B] cursor-pointer hover:underline">Upgrade Plan ↗</span>
+                    </div>
+                )}
                 </motion.div>
             ) : (
                 <motion.div 
@@ -205,6 +251,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
                     initial={{ opacity: 0, y: 5 }} 
                     animate={{ opacity: 1, y: 0 }} 
                     exit={{ opacity: 0, y: -5 }}
+                    transition={{ duration: 0.2 }}
                     className="p-3 bg-[#21ce99]/5 border border-[#21ce99]/20 rounded-xl text-center relative overflow-hidden"
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
@@ -228,12 +275,13 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
             </div>
           </div>
           <div className="relative group">
-             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono text-xs">$</div>
-             <input 
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono text-xs">$</div>
+              {/* OPTIMIZED: Changed transition-all to transition-colors */}
+              <input 
                 type="number" 
                 value={margin} 
                 onChange={(e) => setMargin(Number(e.target.value))} 
-                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-8 pr-4 text-right text-white font-mono font-bold focus:border-[#21ce99] focus:shadow-[0_0_15px_rgba(33,206,153,0.1)] outline-none transition-all" 
+                className="w-full bg-[#0b0e11] border border-[#2a2e39] rounded-xl py-3 pl-8 pr-4 text-right text-white font-mono font-bold focus:border-[#21ce99] focus:shadow-md outline-none transition-colors" 
              />
           </div>
         </div>
@@ -241,7 +289,7 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         {/* TP/SL SECTION */}
         <AnimatePresence>
           {tradingMode === 'futures' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 bg-[#0b0e11] p-4 rounded-xl border border-white/5">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="space-y-4 bg-[#0b0e11] p-4 rounded-xl border border-white/5">
               {/* TP */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -252,12 +300,13 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
                    <span className={`text-[9px] font-mono ${tpEnabled ? 'text-[#21ce99]' : 'text-gray-600'}`}>{getDiff(tpPrice)}%</span>
                 </div>
                 <div className="relative">
+                   {/* OPTIMIZED: Changed transition-all to transition-colors */}
                    <input 
                       type="number" 
                       disabled={!tpEnabled} 
                       value={tpPrice} 
                       onChange={(e) => setTpPrice(e.target.value)} 
-                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-all ${tpEnabled ? 'text-[#21ce99] border-[#21ce99]/30' : 'text-gray-600 opacity-50'}`} 
+                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-colors ${tpEnabled ? 'text-[#21ce99] border-[#21ce99]/30' : 'text-gray-600 opacity-50'}`} 
                    />
                    {!tpEnabled && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[8px] text-gray-500 font-bold uppercase tracking-wider">Auto-Calc</span>}
                 </div>
@@ -273,12 +322,13 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
                    <span className={`text-[9px] font-mono ${slEnabled ? 'text-[#f23645]' : 'text-gray-600'}`}>{getDiff(slPrice)}%</span>
                 </div>
                 <div className="relative">
+                   {/* OPTIMIZED: Changed transition-all to transition-colors */}
                    <input 
                       type="number" 
                       disabled={!slEnabled} 
                       value={slPrice} 
                       onChange={(e) => setSlPrice(e.target.value)} 
-                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-all ${slEnabled ? 'text-[#f23645] border-[#f23645]/30' : 'text-gray-600 opacity-50'}`} 
+                      className={`w-full bg-[#151a21] border border-white/10 rounded-lg p-2 text-right text-xs font-mono font-bold outline-none transition-colors ${slEnabled ? 'text-[#f23645] border-[#f23645]/30' : 'text-gray-600 opacity-50'}`} 
                    />
                    {!slEnabled && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[8px] text-gray-500 font-bold uppercase tracking-wider">Auto-Calc</span>}
                 </div>
@@ -301,14 +351,15 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
       </div>
 
       {/* ACTION BUTTONS */}
+      {/* OPTIMIZED: Removed heavy filter brightness, reduced shadows, used scale only */}
       <div className="p-5 grid grid-cols-2 gap-3 bg-[#0b0e11] border-t border-white/10 relative z-20">
         <motion.button 
-          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }} 
+          whileHover={{ scale: 1.02 }} 
           whileTap={{ scale: 0.98 }}
           onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('buy'); }} 
           onClick={() => handleTrade('buy')}
           disabled={isProcessing} 
-          className="group relative overflow-hidden bg-[#21ce99] text-[#0b0e11] py-4 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(33,206,153,0.15)] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+          className="group relative overflow-hidden bg-[#21ce99] text-[#0b0e11] py-4 rounded-xl flex flex-col items-center justify-center shadow-md disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
           <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
           {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (
@@ -320,12 +371,12 @@ export default function OrderPanel({ currentPrice, activeSymbol, onTrade, active
         </motion.button>
 
         <motion.button 
-          whileHover={{ scale: 1.02, filter: "brightness(1.1)" }} 
+          whileHover={{ scale: 1.02 }} 
           whileTap={{ scale: 0.98 }}
           onMouseEnter={() => { if (tpEnabled || slEnabled) forceDirectionUpdate('sell'); }} 
           onClick={() => handleTrade('sell')}
           disabled={isProcessing} 
-          className="group relative overflow-hidden bg-[#f23645] text-white py-4 rounded-xl flex flex-col items-center justify-center shadow-[0_0_20px_rgba(242,54,69,0.15)] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+          className="group relative overflow-hidden bg-[#f23645] text-white py-4 rounded-xl flex flex-col items-center justify-center shadow-md disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
         >
           <div className="absolute inset-0 bg-black/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
           {isProcessing ? <Loader2 className="animate-spin" size={20} /> : (

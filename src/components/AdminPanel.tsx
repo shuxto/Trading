@@ -8,7 +8,9 @@ import {
   Menu,
   X,
   ShieldCheck,
-  CreditCard 
+  CreditCard,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 // COMPONENTS
@@ -30,11 +32,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   });
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [stats, setStats] = useState({ totalUsers: 0, pendingDeposits: 0, totalVolume: 0 });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); 
+
+  // 🟢 FIXED: Updated state to match the new Overview requirements
+  const [stats, setStats] = useState({ 
+    totalUsers: 0, 
+    pendingVerification: 0, 
+    totalVolume: 0, 
+    totalStaff: 0 
+  });
+  
   const [users, setUsers] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
-  
-  // 2. TRACK CURRENT ADMIN ROLE
   const [currentUserRole, setCurrentUserRole] = useState<string>('');
 
   const [modal, setModal] = useState({
@@ -58,11 +67,11 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       }
   };
 
+  // 🟢 FIXED: Updated fetchData to calculate Staff vs User and Pending KYC
   const fetchData = async () => {
     const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (usersData) setUsers(usersData);
 
-    // Fetch transactions with the performer's email
     const { data: txData } = await supabase
       .from('transactions')
       .select('*, performer:performed_by(email)') 
@@ -76,12 +85,19 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       setTransactions(formattedTx);
     }
 
-    if (usersData && txData) {
-      const { data: accounts } = await supabase.from('trading_accounts').select('balance');
-      const volume = accounts?.reduce((acc, curr) => acc + (curr.balance || 0), 0) || 0;
+    if (usersData) {
+      // Calculate Stats
+      const volume = usersData.reduce((acc, curr) => acc + (curr.balance || 0), 0);
+      
+      // Filter Logic
+      const staffList = usersData.filter(u => u.tier === 'Staff' || u.tier === 'Admin' || u.role === 'admin');
+      const clientList = usersData.filter(u => u.tier !== 'Staff' && u.tier !== 'Admin' && u.role !== 'admin');
+      const pendingKYC = usersData.filter(u => u.kyc_status === 'pending' || u.kyc_status === null || u.kyc_status === '');
+
       setStats({
-        totalUsers: usersData.length,
-        pendingDeposits: txData.filter((t: any) => t.status === 'pending').length,
+        totalUsers: clientList.length,
+        totalStaff: staffList.length,
+        pendingVerification: pendingKYC.length,
         totalVolume: volume
       });
     }
@@ -103,10 +119,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     });
   };
 
-  // --- UPDATED: HANDLES ALL FUND TYPES INCLUDING REMOVE ---
-  // Renamed transactionId to _transactionId to fix the unused variable error
   const handleManageFunds = async (userId: string, amount: number, type: 'deposit' | 'withdrawal' | 'bonus' | 'remove', _transactionId?: number, method?: string) => {
-      
       let title = `Confirm ${type.toUpperCase()}`;
       let desc = `Are you sure you want to ${type} $${amount}?`;
       let alertType: 'warning' | 'danger' | 'success' = 'success';
@@ -121,7 +134,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       }
 
       confirmAction(title, desc, alertType, async () => {
-          // We pass positive amount, SQL handles subtraction based on type
           const { error } = await supabase.rpc('admin_adjust_balance', { 
             p_user_id: userId, 
             p_amount: amount, 
@@ -156,7 +168,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const renderContent = () => {
     switch (activeTab) {
       case 'overview': return <AdminOverviewTab stats={stats} />;
-      
       case 'banking': return (
           <AdminBankingTab 
               users={users} 
@@ -165,7 +176,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               currentUserRole={currentUserRole} 
           />
       );
-
       case 'users': return <AdminUsersTab users={users} />;
       case 'verification': return <AdminVerificationTab users={users} onVerify={handleVerifyUser} onReject={handleRejectUser} />;
       default: return <AdminOverviewTab stats={stats} />;
@@ -176,24 +186,75 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     <div className="min-h-screen bg-[#0b0e11] text-white font-sans flex overflow-hidden">
       <GlassModal isOpen={modal.isOpen} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} title={modal.title} description={modal.description} type={modal.type} confirmText={modal.confirmText} isLoading={modal.isLoading} />
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#151a21] border-r border-[#2a2e39] transform transition-transform duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
-        <div className="p-6 border-b border-[#2a2e39] flex justify-between items-center">
-          <div><h1 className="text-xl font-black text-[#F0B90B] tracking-wider">ADMIN<span className="text-white">PANEL</span></h1></div>
+      <aside className={`fixed inset-y-0 left-0 z-50 bg-[#151a21] border-r border-[#2a2e39] transform transition-all duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:relative md:translate-x-0 
+        ${isSidebarCollapsed ? 'w-20' : 'w-64'} 
+        flex flex-col`
+      }>
+        
+        <div className={`h-20 border-b border-[#2a2e39] flex items-center shrink-0 ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-6'}`}>
+          {!isSidebarCollapsed ? (
+             <div><h1 className="text-xl font-black text-[#F0B90B] tracking-wider">ADMIN<span className="text-white">PANEL</span></h1></div>
+          ) : (
+             <h1 className="text-xl font-black text-[#F0B90B]">AP</h1>
+          )}
+          
+          <button 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+            className={`hidden md:flex p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2a2e39] transition-colors ${isSidebarCollapsed ? 'absolute -right-3 top-8 bg-[#1e232d] border border-[#2a2e39] shadow-lg text-[#F0B90B]' : ''}`}
+          >
+             {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={20} />}
+          </button>
+
           <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden text-gray-500"><X size={24}/></button>
         </div>
-        <nav className="flex-1 p-4 space-y-2">
+
+        <nav className="flex-1 p-3 space-y-2 overflow-y-auto custom-scrollbar">
           {['overview', 'banking', 'verification', 'users'].map((tab) => (
-             <button key={tab} onClick={() => { setActiveTab(tab as any); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all capitalize ${activeTab === tab ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d]'}`}>
-                {tab === 'overview' && <LayoutDashboard size={20} />}
-                {tab === 'banking' && <CreditCard size={20} />}
-                {tab === 'verification' && <ShieldCheck size={20} />}
-                {tab === 'users' && <Users size={20} />}
-                {tab}
+             <button 
+                key={tab} 
+                onClick={() => { setActiveTab(tab as any); setIsMobileMenuOpen(false); }} 
+                className={`w-full flex items-center transition-all capitalize rounded-xl group relative
+                    ${isSidebarCollapsed ? 'justify-center py-3 px-0' : 'gap-3 px-4 py-3'}
+                    ${activeTab === tab ? 'bg-[#21ce99] text-black font-bold' : 'text-[#8b9bb4] hover:bg-[#1e232d] hover:text-white'}
+                `}
+                title={isSidebarCollapsed ? tab.charAt(0).toUpperCase() + tab.slice(1) : ''}
+             >
+                <div>
+                    {tab === 'overview' && <LayoutDashboard size={20} />}
+                    {tab === 'banking' && <CreditCard size={20} />}
+                    {tab === 'verification' && <ShieldCheck size={20} />}
+                    {tab === 'users' && <Users size={20} />}
+                </div>
+
+                {!isSidebarCollapsed && <span>{tab}</span>}
+
+                {isSidebarCollapsed && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-black border border-white/10 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 uppercase font-bold tracking-wider pointer-events-none">
+                        {tab}
+                    </div>
+                )}
              </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-[#2a2e39]">
-          <button onClick={handleLogoutClick} className="w-full flex items-center gap-2 text-[#f23645] px-4 py-2 hover:bg-[#f23645]/10 rounded-lg transition-colors"><LogOut size={18} /> Sign Out</button>
+
+        <div className="p-3 border-t border-[#2a2e39]">
+          <button 
+            onClick={handleLogoutClick} 
+            className={`w-full flex items-center text-[#f23645] hover:bg-[#f23645]/10 rounded-lg transition-colors group relative
+                ${isSidebarCollapsed ? 'justify-center py-3 px-0' : 'gap-2 px-4 py-2'}
+            `}
+          >
+            <LogOut size={18} /> 
+            {!isSidebarCollapsed && <span>Sign Out</span>}
+            
+            {isSidebarCollapsed && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-black border border-red-500/30 text-red-500 text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 uppercase font-bold pointer-events-none">
+                    Log Out
+                </div>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -208,7 +269,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
              </span>
            </div>
         </header>
-        <div className="flex-1 overflow-hidden relative">
+        <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#0b0e11]">
             {renderContent()}
         </div>
       </main>

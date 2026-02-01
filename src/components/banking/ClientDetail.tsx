@@ -4,7 +4,7 @@ import {
     ArrowLeft, Wallet, ArrowDownLeft, Gift, History, CheckCircle, XCircle, 
     Loader2, UserCog, Shield, CreditCard, Hash, Globe, Copy, Check, ArrowUpRight,
     Landmark, Bitcoin, CreditCard as CardIcon, HelpCircle, AlertOctagon,
-    ArrowRightLeft, ChevronLeft, ChevronRight // Added Icons for Pagination
+    ArrowRightLeft, ChevronLeft, ChevronRight, Edit2, Save, Crown, Phone, User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ClientTradingAccounts from './ClientTradingAccounts';
@@ -25,6 +25,46 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [totalEquity, setTotalEquity] = useState<number>(user.balance || 0);
+
+  // 🟢 TIER MANAGEMENT LOGIC
+  const [isEditingTier, setIsEditingTier] = useState(false);
+  const [tierInput, setTierInput] = useState(user.tier || 'Basic');
+
+  const handleUpdateTier = async () => {
+      setLoading(true);
+      const { error } = await supabase.from('profiles').update({ tier: tierInput }).eq('id', user.id);
+      if (!error) {
+          user.tier = tierInput; // Update local reference immediately
+          setIsEditingTier(false);
+      } else {
+          alert("Failed to update tier");
+      }
+      setLoading(false);
+  };
+
+  // 🟢 CRM DATA STATE (Phone & Full Name)
+  const [crmData, setCrmData] = useState({ phone: '', fullName: '' });
+
+  // 🟢 FETCH CRM DATA ON LOAD
+  useEffect(() => {
+    const fetchCrmData = async () => {
+        // 1. We search the 'crm_leads' table
+        const { data } = await supabase
+            .from('crm_leads') 
+            .select('phone, name, surname') 
+            .eq('email', user.email) // Linking by Email
+            .single();
+
+        if (data) {
+            const full = (data.name || '') + ' ' + (data.surname || '');
+            setCrmData({ 
+                phone: data.phone || '', 
+                fullName: full.trim() || '' 
+            });
+        }
+    };
+    if (user.email) fetchCrmData();
+  }, [user.email]);
 
   // PAGINATION STATE
   const [currentPage, setCurrentPage] = useState(1);
@@ -107,16 +147,84 @@ export default function ClientDetail({ user, transactions = [], onBack, onManage
   return (
     <div className="flex flex-col h-full bg-[#0b0e11] text-white animate-in slide-in-from-right-4 duration-300 font-sans overflow-hidden">
       
-      {/* HEADER */}
-      <div className="h-14 shrink-0 bg-[#151a21] border-b border-[#2a2e39] flex items-center gap-4 px-4">
-          <button onClick={onBack} className="p-2 rounded-lg bg-[#1e232d] text-gray-400 hover:text-white hover:bg-[#2a2e39] border border-[#2a2e39] transition-colors">
-              <ArrowLeft size={16} />
-          </button>
+      {/* 🟢 HEADER (UPDATED WITH CRM DATA) */}
+      <div className="h-16 shrink-0 bg-[#151a21] border-b border-[#2a2e39] flex items-center justify-between px-6 shadow-sm z-20">
+          
+          {/* LEFT SIDE: Navigation & Detailed User Info */}
+          <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2 rounded-lg bg-[#1e232d] text-gray-400 hover:text-white hover:bg-[#2a2e39] border border-[#2a2e39] transition-colors">
+                <ArrowLeft size={18} />
+            </button>
+            <div className="flex flex-col justify-center">
+                {/* LINE 1: Email + Full Name (From CRM) */}
+                <div className="flex items-center gap-3">
+                    <h1 className="text-base font-bold text-white tracking-tight">{user.email}</h1>
+                    
+                    {/* Show CRM Name if found, otherwise fallback */}
+                    {(crmData.fullName || user.real_name) && (
+                        <div className="flex items-center gap-1.5 bg-[#1e232d] border border-[#2a2e39] px-2 py-0.5 rounded text-[10px] text-gray-300 font-bold uppercase tracking-wider">
+                            <User size={10} className="text-[#21ce99]" />
+                            <span>{crmData.fullName || user.real_name}</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* LINE 2: ID + Phone (From CRM) */}
+                <div className="flex items-center gap-3 text-[11px] text-gray-500 font-mono mt-0.5 uppercase">
+                    <div className="flex items-center gap-1.5" title="User ID">
+                        <Hash size={10} />
+                        <span>{user.id}</span>
+                    </div>
+                    
+                    {/* Show CRM Phone if found */}
+                    {crmData.phone && (
+                        <>
+                            <span className="text-[#2a2e39]">|</span>
+                            <div className="flex items-center gap-1.5 text-gray-400" title="Phone Number">
+                                <Phone size={10} />
+                                <span>{crmData.phone}</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE: Tier Manager */}
           <div>
-              <h1 className="text-sm font-bold text-white">{user.email}</h1>
-              <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono uppercase">
-                  <span>{user.id}</span> <span className="text-[#2a2e39]">|</span> <span className="text-[#F0B90B]">{user.tier || 'STANDARD'}</span>
-              </div>
+            {isEditingTier ? (
+                <div className="flex items-center gap-2 bg-[#0b0e11] p-1 pr-2 rounded-lg border border-[#F0B90B] shadow-[0_0_15px_rgba(240,185,11,0.15)] animate-in slide-in-from-right-2">
+                    <select 
+                        value={tierInput}
+                        onChange={(e) => setTierInput(e.target.value)}
+                        className="bg-transparent text-[#F0B90B] text-xs font-black uppercase outline-none cursor-pointer py-1.5 pl-2"
+                    >
+                        <option className="bg-[#0b0e11] text-white" value="Basic">Basic</option>
+                        <option className="bg-[#0b0e11] text-white" value="Silver">Silver</option>
+                        <option className="bg-[#0b0e11] text-white" value="Gold">Gold</option>
+                        <option className="bg-[#0b0e11] text-white" value="Platinum">Platinum</option>
+                        <option className="bg-[#0b0e11] text-white" value="Diamond">Diamond</option>
+                    </select>
+                    <button onClick={handleUpdateTier} disabled={loading} className="bg-[#21ce99] text-[#0b0e11] p-1 rounded hover:bg-[#21ce99]/80 transition-colors">
+                        {loading ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} />}
+                    </button>
+                </div>
+            ) : (
+                <div className="flex items-center gap-3 bg-[#1e232d] border border-[#2a2e39] pl-4 pr-1.5 py-1.5 rounded-lg group hover:border-[#F0B90B]/50 transition-all">
+                     <div className="flex items-center gap-2">
+                        <Crown size={14} className="text-[#F0B90B]" />
+                        <span className="text-[#F0B90B] font-black text-xs tracking-wider uppercase">{user.tier || 'Basic'}</span>
+                     </div>
+                     
+                     <button 
+                        onClick={() => setIsEditingTier(true)} 
+                        className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-white/10 transition-all"
+                        title="Edit Tier"
+                     >
+                        <Edit2 size={12} />
+                     </button>
+                </div>
+            )}
           </div>
       </div>
 

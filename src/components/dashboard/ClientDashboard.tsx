@@ -23,25 +23,27 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [kycStatus, setKycStatus] = useState<string>('pending'); 
+  const [tier, setTier] = useState<string>('Basic'); // 🟢 NEW: Store Tier
   const [loading, setLoading] = useState(true);
-  const [launching, setLaunching] = useState(false); // 🟢 New state for launch button
+  const [launching, setLaunching] = useState(false);
 
-  // CHECK KYC STATUS ON LOAD
+  // CHECK KYC & TIER ON LOAD
   useEffect(() => {
-    const checkKyc = async () => {
+    const checkUserdata = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
            .from('profiles')
-           .select('kyc_status')
+           .select('kyc_status, tier') // 🟢 Fetch Tier too
            .eq('id', user.id)
            .single();
         
         setKycStatus(profile?.kyc_status || 'unverified');
+        setTier(profile?.tier || 'Basic'); // 🟢 Set Tier
       }
       setLoading(false);
     };
-    checkKyc();
+    checkUserdata();
   }, []);
 
   const menuItems = [
@@ -63,25 +65,21 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
     setIsMobileMenuOpen(false);
   };
 
-  // 🟢 NEW: SMART LAUNCH LOGIC
   const handleQuickLaunch = async () => {
       setLaunching(true);
       try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-              // 1. Find the first available account
               const { data: accounts } = await supabase
                   .from('trading_accounts')
                   .select('id')
                   .eq('user_id', user.id)
-                  .order('created_at', { ascending: true }) // Picks the oldest/main account
+                  .order('created_at', { ascending: true })
                   .limit(1);
 
               if (accounts && accounts.length > 0) {
-                  // 2. Auto-Launch into that account
                   window.location.href = `?mode=trading&account_id=${accounts[0].id}`;
               } else {
-                  // 3. No account found? Redirect to creation page
                   alert("⚠️ No trading unit found. Please create one first.");
                   handleTabChange('accounts', true);
               }
@@ -95,7 +93,6 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
 
   const renderContent = () => {
     switch (activeTab) {
-      // ✅ FIX: Passed isLocked prop here
       case 'overview': 
         return <OverviewTab onNavigateToPlatform={handleQuickLaunch} isLocked={kycStatus !== 'verified'} />;
       case 'accounts': return <AccountsTab />;
@@ -106,6 +103,12 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
       default: return <OverviewTab onNavigateToPlatform={handleQuickLaunch} isLocked={kycStatus !== 'verified'} />;
     }
   };
+
+  // 🟢 Helper to determine Tier Color
+  // Added 'Diamond' to the list
+  const isPremium = tier === 'Gold' || tier === 'Platinum' || tier === 'Diamond';
+  const tierColor = isPremium ? 'text-[#F0B90B]' : 'text-[#21ce99]';
+  const tierBorder = isPremium ? 'bg-[#F0B90B]/5 border-[#F0B90B]/20' : 'bg-[#21ce99]/5 border-[#21ce99]/20';
 
   if (loading) {
     return (
@@ -144,24 +147,17 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
           </button>
         </div>
 
-        {/* KYC STATUS BADGE */}
+        {/* 🟢 TIER STATUS BADGE (Fixed for Performance) */}
         <div className="px-6 py-6">
-            <div className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-500 ${
-                kycStatus === 'verified' 
-                ? 'bg-[#21ce99]/5 border-[#21ce99]/20' 
-                : 'bg-[#F0B90B]/5 border-[#F0B90B]/20'
-            }`}>
+            <div className={`relative overflow-hidden rounded-xl border p-4 transition-all duration-500 ${tierBorder}`}>
                <div className="flex justify-between items-start mb-2">
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Security Level</span>
-                   {kycStatus === 'verified' ? <ShieldCheck size={16} className="text-[#21ce99]" /> : <Lock size={16} className="text-[#F0B90B]" />}
+                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Account Tier</span>
+                   <ShieldCheck size={16} className={tierColor} />
                </div>
-               <div className={`text-sm font-black uppercase tracking-wider flex items-center gap-2 ${
-                   kycStatus === 'verified' ? 'text-[#21ce99]' : 'text-[#F0B90B]'
-               }`}>
-                   {kycStatus === 'verified' ? 'CLEARANCE GRANTED' : 'RESTRICTED ACCESS'}
+               <div className={`text-sm font-black uppercase tracking-wider flex items-center gap-2 ${tierColor}`}>
+                   {tier} MEMBERSHIP
                </div>
-               {/* Scan Line Animation */}
-               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent via-white/5 to-transparent -translate-y-full animate-[scan_3s_infinite_linear]" />
+               {/* ❌ REMOVED: High GPU Usage Animation */}
             </div>
         </div>
 
@@ -206,7 +202,6 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
 
         {/* BOTTOM ACTIONS */}
         <div className="p-4 border-t border-white/5 bg-black/20 backdrop-blur-md space-y-3">
-          {/* 🟢 UPDATED LAUNCH BUTTON WITH SMART LOGIC */}
           <button 
             onClick={handleQuickLaunch}
             disabled={kycStatus !== 'verified' || launching}
@@ -233,8 +228,6 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
-        
-        {/* MOBILE HEADER */}
         <header className="md:hidden h-16 bg-[#151a21]/90 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 flex-shrink-0 sticky top-0 z-40">
           <button onClick={() => setIsMobileMenuOpen(true)} className="text-gray-400 hover:text-white">
             <Menu size={24} />
@@ -243,7 +236,6 @@ export default function ClientDashboard({ userEmail, onLogout }: Props) {
           <div className="w-6" /> 
         </header>
 
-        {/* SCROLLING CONTAINER */}
         <div className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar">
           <div className="max-w-7xl mx-auto pb-20">
               {renderContent()}
